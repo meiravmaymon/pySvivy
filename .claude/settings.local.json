@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for file in *.zip)",
+      "Bash(do unzip -q -o \"$file\")",
+      "Bash(done)",
+      "Bash(python:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "Bash(dir /B /S \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\")",
+      "Bash(dir \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\")"
+    ]
+  }
+}

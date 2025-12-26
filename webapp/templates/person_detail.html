@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>פרופיל חבר מועצה</title>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;800&family=Noto+Sans+Hebrew:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-dark": "#111621",
+                        "surface-dark": "#1a2231",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans Hebrew", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Noto Sans Hebrew', 'Public Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-background-dark text-white min-h-screen flex flex-col font-display">
+    <!-- Top Navigation -->
+    <header class="flex items-center justify-between whitespace-nowrap border-b border-slate-800 bg-surface-dark px-10 py-3 sticky top-0 z-50 shadow-sm">
+        <div class="flex items-center gap-8">
+            <div class="flex items-center gap-4">
+                <div class="size-8 text-primary">
+                    <svg fill="currentColor" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M36.7273 44C33.9891 44 31.6043 39.8386 30.3636 33.69C29.123 39.8386 26.7382 44 24 44C21.2618 44 18.877 39.8386 17.6364 33.69C16.3957 39.8386 14.0109 44 11.2727 44C7.25611 44 4 35.0457 4 24C4 12.9543 7.25611 4 11.2727 4C14.0109 4 16.3957 8.16144 17.6364 14.31C18.877 8.16144 21.2618 4 24 4C26.7382 4 29.123 8.16144 30.3636 14.31C31.6043 8.16144 33.9891 4 36.7273 4C40.7439 4 44 12.9543 44 24C44 35.0457 40.7439 44 36.7273 44Z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold leading-tight">מועצת יהוד-מונוסון</h2>
+            </div>
+        </div>
+        <div class="flex flex-1 justify-end gap-8 items-center">
+            <div class="flex items-center gap-9">
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/">ראשי</a>
+                <a class="text-primary text-sm font-bold" href="/persons">חברי מועצה</a>
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/boards">ועדות</a>
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/discussions">החלטות</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full max-w-[1200px] mx-auto px-4 md:px-10 py-8">
+        <!-- Breadcrumbs -->
+        <div class="flex flex-wrap items-center gap-2 mb-6 text-sm">
+            <a class="text-slate-400 hover:text-primary transition-colors" href="/">ראשי</a>
+            <span class="material-symbols-outlined text-slate-400 text-sm rotate-180">chevron_right</span>
+            <a class="text-slate-400 hover:text-primary transition-colors" href="/persons">חברי מועצה</a>
+            <span class="material-symbols-outlined text-slate-400 text-sm rotate-180">chevron_right</span>
+            <span class="text-white font-medium" id="breadcrumbName">טוען...</span>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-20">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p class="text-slate-400 mt-4">טוען פרטי חבר מועצה...</p>
+        </div>
+
+        <!-- Content Container -->
+        <div id="content" class="hidden">
+            <!-- Hero Profile Card -->
+            <div class="bg-surface-dark rounded-xl p-6 md:p-8 shadow-sm border border-slate-800 mb-8">
+                <div class="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                    <div class="relative shrink-0">
+                        <div id="avatar" class="bg-center bg-no-repeat bg-cover rounded-full size-32 md:size-40 border-4 border-slate-700 shadow-md bg-primary/20 flex items-center justify-center text-white text-5xl font-bold">
+                        </div>
+                        <div id="statusIndicator" class="absolute bottom-2 right-2 bg-green-500 size-4 rounded-full border-2 border-surface-dark" title="פעיל"></div>
+                    </div>
+                    <div class="flex flex-col flex-1 text-center md:text-right w-full">
+                        <div class="flex flex-col md:flex-row justify-between items-center md:items-start w-full gap-4">
+                            <div>
+                                <h1 id="personName" class="text-3xl md:text-4xl font-bold text-white mb-2"></h1>
+                                <div id="badges" class="flex flex-wrap gap-3 justify-center md:justify-start items-center text-slate-300 mb-4">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Quick Stats Row -->
+                        <div class="flex flex-wrap justify-center md:justify-start gap-8 mt-6 pt-6 border-t border-slate-800">
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 rounded-full bg-blue-900/30 flex items-center justify-center text-primary">
+                                    <span class="material-symbols-outlined">how_to_vote</span>
+                                </div>
+                                <div class="flex flex-col text-right">
+                                    <span class="text-xs text-slate-400 font-medium">סה״כ הצבעות</span>
+                                    <span id="totalVotes" class="font-bold text-white"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 rounded-full bg-purple-900/30 flex items-center justify-center text-purple-400">
+                                    <span class="material-symbols-outlined">groups</span>
+                                </div>
+                                <div class="flex flex-col text-right">
+                                    <span class="text-xs text-slate-400 font-medium">חברות בוועדות</span>
+                                    <span id="boardsCount" class="font-bold text-white"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 rounded-full bg-green-900/30 flex items-center justify-center text-green-400">
+                                    <span class="material-symbols-outlined">event_available</span>
+                                </div>
+                                <div class="flex flex-col text-right">
+                                    <span class="text-xs text-slate-400 font-medium">נוכחות בישיבות</span>
+                                    <span id="attendance" class="font-bold text-white"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Metrics & Stats -->
+                <div class="lg:col-span-2 flex flex-col gap-8">
+                    <!-- Performance Metrics -->
+                    <section>
+                        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">monitoring</span>
+                            מדדי פעילות
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- Votes Distribution -->
+                            <div class="bg-surface-dark p-6 rounded-xl border border-slate-800 shadow-sm hover:border-primary/50 transition-colors">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="bg-green-900/20 p-2 rounded-lg text-green-400">
+                                        <span class="material-symbols-outlined">thumb_up</span>
+                                    </div>
+                                </div>
+                                <h4 class="text-slate-400 text-sm font-medium mb-1">הצבעות בעד</h4>
+                                <div id="yesVotes" class="text-3xl font-bold text-white"></div>
+                            </div>
+
+                            <div class="bg-surface-dark p-6 rounded-xl border border-slate-800 shadow-sm hover:border-primary/50 transition-colors">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="bg-red-900/20 p-2 rounded-lg text-red-400">
+                                        <span class="material-symbols-outlined">thumb_down</span>
+                                    </div>
+                                </div>
+                                <h4 class="text-slate-400 text-sm font-medium mb-1">הצבעות נגד</h4>
+                                <div id="noVotes" class="text-3xl font-bold text-white"></div>
+                            </div>
+
+                            <div class="bg-surface-dark p-6 rounded-xl border border-slate-800 shadow-sm hover:border-primary/50 transition-colors">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="bg-slate-700 p-2 rounded-lg text-slate-300">
+                                        <span class="material-symbols-outlined">remove</span>
+                                    </div>
+                                </div>
+                                <h4 class="text-slate-400 text-sm font-medium mb-1">נמנעים</h4>
+                                <div id="avoidVotes" class="text-3xl font-bold text-white"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Recent Activity -->
+                    <section>
+                        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">history_edu</span>
+                            פעילות אחרונה
+                        </h3>
+                        <div class="bg-surface-dark rounded-xl border border-slate-800 overflow-hidden" id="recentActivity">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column: Boards & Info -->
+                <div class="flex flex-col gap-8">
+                    <!-- Committees Card -->
+                    <div class="bg-surface-dark rounded-xl border border-slate-800 p-6 shadow-sm">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">gavel</span>
+                            חברות בוועדות
+                        </h3>
+                        <div id="boardsList" class="space-y-4">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const personId = {{ person_id }};
+
+        async function loadPersonDetails() {
+            try {
+                const response = await fetch(`/api/person/${personId}`);
+                const person = await response.json();
+
+                if (person.error) {
+                    alert('חבר מועצה לא נמצא');
+                    window.location.href = '/persons';
+                    return;
+                }
+
+                // Update breadcrumb
+                document.getElementById('breadcrumbName').textContent = person.name;
+
+                // Avatar initials
+                const nameParts = person.name.split(' ');
+                const initials = nameParts.length >= 2 ? nameParts[0][0] + nameParts[1][0] : nameParts[0][0];
+                document.getElementById('avatar').textContent = initials;
+
+                // Status indicator
+                document.getElementById('statusIndicator').className = person.is_active ?
+                    'absolute bottom-2 right-2 bg-green-500 size-4 rounded-full border-2 border-surface-dark' :
+                    'absolute bottom-2 right-2 bg-gray-500 size-4 rounded-full border-2 border-surface-dark';
+
+                // Name
+                document.getElementById('personName').textContent = person.name;
+
+                // Badges
+                const badgesHtml = `
+                    <span class="flex items-center gap-1 bg-slate-800 px-3 py-1 rounded-full text-sm font-medium">
+                        <span class="material-symbols-outlined text-[18px]">verified</span>
+                        ${person.role || 'חבר מועצה'}
+                    </span>
+                    ${person.faction ? `
+                    <span class="flex items-center gap-1 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-bold">
+                        <span class="material-symbols-outlined text-[18px]">flag</span>
+                        ${person.faction.split('>')[1] || person.faction}
+                    </span>
+                    ` : ''}
+                `;
+                document.getElementById('badges').innerHTML = badgesHtml;
+
+                // Quick stats
+                document.getElementById('totalVotes').textContent = person.votes.total;
+                document.getElementById('boardsCount').textContent = person.boards.length;
+                document.getElementById('attendance').textContent = `${person.attendance.percentage}%`;
+
+                // Vote metrics
+                document.getElementById('yesVotes').textContent = person.votes.yes;
+                document.getElementById('noVotes').textContent = person.votes.no;
+                document.getElementById('avoidVotes').textContent = person.votes.avoid;
+
+                // Boards list
+                const boardsHtml = person.boards.map(b => `
+                    <div class="flex items-start gap-3">
+                        <div class="size-2 mt-2 rounded-full bg-primary shrink-0"></div>
+                        <div>
+                            <p class="text-sm font-bold text-white">${b.title}</p>
+                            <p class="text-xs text-slate-400">${b.type || 'ועדה'}</p>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('boardsList').innerHTML = boardsHtml || '<p class="text-slate-400 text-sm">לא חבר בוועדות</p>';
+
+                // Recent activity
+                const activityHtml = person.recent_activity.map(a => {
+                    const voteColors = {
+                        'yes': 'text-green-400',
+                        'no': 'text-red-400',
+                        'avoid': 'text-slate-400',
+                        'missing': 'text-slate-600'
+                    };
+                    const voteLabels = {
+                        'yes': 'בעד',
+                        'no': 'נגד',
+                        'avoid': 'נמנע',
+                        'missing': 'נעדר'
+                    };
+
+                    return `
+                        <div class="flex gap-4 p-6 border-b border-slate-800 last:border-0 hover:bg-slate-800/50 transition-colors">
+                            <div class="flex flex-col items-center gap-1 min-w-[60px]">
+                                <span class="text-lg font-bold text-white">${a.date ? new Date(a.date).getDate() : '??'}</span>
+                                <span class="text-xs text-slate-500 uppercase">${a.date ? new Date(a.date).toLocaleDateString('he-IL', {month: 'short'}) : ''}</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase">${a.category || 'כללי'}</span>
+                                </div>
+                                <h4 class="text-base font-bold text-white mb-1">${a.title}</h4>
+                                <p class="text-sm ${voteColors[a.vote]} font-bold">הצביע: ${voteLabels[a.vote]}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('recentActivity').innerHTML = activityHtml || '<p class="p-6 text-slate-400 text-center">אין פעילות אחרונה</p>';
+
+                // Show content, hide loading
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error loading person details:', error);
+                alert('שגיאה בטעינת פרטי חבר המועצה');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadPersonDetails);
+    </script>
+</body>
+</html>

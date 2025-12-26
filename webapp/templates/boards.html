@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>הנהגת העיר - ועדות</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+Hebrew:wght@300;400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols_Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/static/js/global-filter.js"></script>
+    <script src="/static/js/global-filter-ui.js"></script>
+    <script src="/static/js/empty-state.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#19e65e",
+                        "background-dark": "#112116",
+                        "card-dark": "#1c2e24",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "Noto Sans Hebrew", "sans-serif"],
+                        "body": ["Noto Sans Hebrew", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Noto Sans Hebrew', 'Space Grotesk', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #112116; }
+        ::-webkit-scrollbar-thumb { background: #29382e; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #19e65e; }
+        .glass-panel {
+            background: rgba(28, 46, 36, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background-dark text-white font-body min-h-screen flex flex-col">
+    <!-- Top Navigation -->
+    <nav class="sticky top-0 z-50 w-full glass-panel border-b border-[#29382e]">
+        <div class="px-6 md:px-10 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="size-10 flex items-center justify-center rounded-xl bg-primary/20 text-primary">
+                    <span class="material-symbols-outlined text-3xl">account_balance</span>
+                </div>
+                <h2 class="text-white text-xl font-display font-bold tracking-tight hidden md:block">מועצת יהוד-מונוסון</h2>
+            </div>
+            <div class="hidden lg:flex items-center gap-8">
+                <a class="text-white text-base font-bold hover:text-primary transition-colors" href="/">ראשי</a>
+                <a class="text-white text-base font-bold hover:text-primary transition-colors" href="/persons">חברי מועצה</a>
+                <a class="text-primary text-base font-bold transition-colors" href="/boards">ועדות</a>
+                <a class="text-white text-base font-bold hover:text-primary transition-colors" href="/discussions">החלטות</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center w-full px-4 md:px-10 py-8 max-w-[1400px] mx-auto">
+        <!-- Hero Section -->
+        <div class="w-full flex flex-col gap-6 mb-10">
+            <div class="flex items-center gap-3 mb-2 justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-bold border border-primary/20">נתונים עדכניים</span>
+                    <span class="text-[#9db8a6] text-base">עודכן לאחרונה</span>
+                </div>
+                <!-- Global Filter -->
+                <div id="globalFilterContainer"></div>
+            </div>
+            <h1 class="text-4xl md:text-6xl font-display font-black leading-tight tracking-tight text-white">
+                ועדות <span class="text-transparent bg-clip-text bg-gradient-to-l from-primary to-green-300">המועצה</span>
+            </h1>
+            <p class="text-[#9db8a6] text-lg font-light max-w-2xl">
+                מערכת מעקב בזמן אמת המנגישה את פעילות הוועדות העירוניות לתושב בצורה שקופה וברורה.
+            </p>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-12" id="statsGrid">
+            <!-- Will be populated by JavaScript -->
+        </div>
+
+        <!-- Committees Section -->
+        <div class="w-full flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-display font-bold text-white">ועדות פעילות</h3>
+            </div>
+
+            <!-- Committee Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="boardsGrid">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function loadBoards() {
+            try {
+                const response = await fetch('/api/boards');
+                let boards = await response.json();
+
+                // Sort boards: City Council (מועצת עיר) → Mandatory (ועדת חובה) → Municipal (ועדת רשות)
+                boards = boards.sort((a, b) => {
+                    const getTypePriority = (type) => {
+                        if (!type) return 999;
+                        if (type.includes('מועצת עיר')) return 1; // City Council first
+                        if (type.includes('ועדת חובה')) return 2; // Mandatory committees
+                        if (type.includes('ועדת רשות')) return 3; // Municipal committees
+                        return 999;
+                    };
+
+                    const priorityA = getTypePriority(a.committee_type);
+                    const priorityB = getTypePriority(b.committee_type);
+
+                    if (priorityA !== priorityB) {
+                        return priorityA - priorityB;
+                    }
+
+                    // If same type, sort alphabetically
+                    return a.title.localeCompare(b.title, 'he');
+                });
+
+                // Calculate stats
+                const activeBoards = boards.filter(b => b.is_active).length;
+                const totalMembers = boards.reduce((sum, b) => sum + b.members_count, 0);
+                const totalMeetings = boards.reduce((sum, b) => sum + b.meetings_count, 0);
+
+                // Stats
+                const statsHtml = `
+                    <div class="bg-card-dark rounded-xl p-7 border border-[#29382e] relative overflow-hidden group hover:border-primary/50 transition-colors">
+                        <div class="absolute -right-10 -top-10 size-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all"></div>
+                        <div class="relative z-10 flex flex-col gap-4">
+                            <div class="flex justify-between items-start">
+                                <div class="size-14 rounded-lg bg-[#29382e] flex items-center justify-center text-white group-hover:text-primary transition-colors">
+                                    <span class="material-symbols-outlined text-2xl">gavel</span>
+                                </div>
+                                <div class="flex items-center gap-1 text-primary bg-primary/10 px-3 py-1.5 rounded-md">
+                                    <span class="text-sm font-bold">פעיל</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-[#9db8a6] text-base font-medium mb-1">ועדות פעילות</p>
+                                <p class="text-white text-4xl font-display font-bold">${activeBoards}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark rounded-xl p-7 border border-[#29382e] relative overflow-hidden group hover:border-primary/50 transition-colors">
+                        <div class="absolute -right-10 -top-10 size-32 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-all"></div>
+                        <div class="relative z-10 flex flex-col gap-4">
+                            <div class="flex justify-between items-start">
+                                <div class="size-14 rounded-lg bg-[#29382e] flex items-center justify-center text-white group-hover:text-blue-400 transition-colors">
+                                    <span class="material-symbols-outlined text-2xl">groups</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-[#9db8a6] text-base font-medium mb-1">סה״כ חברים</p>
+                                <p class="text-white text-4xl font-display font-bold">${totalMembers}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark rounded-xl p-7 border border-[#29382e] relative overflow-hidden group hover:border-primary/50 transition-colors">
+                        <div class="absolute -right-10 -top-10 size-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all"></div>
+                        <div class="relative z-10 flex flex-col gap-4">
+                            <div class="flex justify-between items-start">
+                                <div class="size-14 rounded-lg bg-[#29382e] flex items-center justify-center text-white group-hover:text-purple-400 transition-colors">
+                                    <span class="material-symbols-outlined text-2xl">event</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-[#9db8a6] text-base font-medium mb-1">ישיבות</p>
+                                <p class="text-white text-4xl font-display font-bold">${totalMeetings}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('statsGrid').innerHTML = statsHtml;
+
+                // Boards Grid
+                const colors = [
+                    { icon: 'yellow-400', grad: 'from-yellow-400 to-orange-500' },
+                    { icon: 'blue-400', grad: 'from-blue-400 to-indigo-500' },
+                    { icon: 'primary', grad: 'from-primary to-green-300' },
+                    { icon: 'pink-400', grad: 'from-pink-400 to-rose-500' },
+                    { icon: 'purple-400', grad: 'from-purple-400 to-indigo-500' },
+                ];
+
+                const boardsHtml = boards.map((board, index) => {
+                    const color = colors[index % colors.length];
+                    const statusColor = board.is_active ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-400';
+                    const statusText = board.is_active ? 'פעיל' : 'לא פעיל';
+                    const iconName = board.title.includes('חינוך') ? 'school' :
+                                   board.title.includes('תכנון') ? 'apartment' :
+                                   board.title.includes('סביבה') ? 'park' :
+                                   board.title.includes('תרבות') ? 'theater_comedy' :
+                                   'gavel';
+
+                    return `
+                        <div class="group bg-card-dark hover:bg-[#253a2f] border border-[#29382e] hover:border-primary/30 rounded-xl p-6 transition-all duration-300 cursor-pointer">
+                            <div class="flex justify-between items-start mb-5">
+                                <div class="flex gap-4 items-center">
+                                    <div class="size-14 rounded-full bg-${color.icon}/20 text-${color.icon} flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-2xl">${iconName}</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-white font-bold text-xl">${board.title}</h4>
+                                        <p class="text-sm text-[#9db8a6]">${board.type || 'ועדה'}</p>
+                                    </div>
+                                </div>
+                                <span class="${statusColor} text-sm px-3 py-1.5 rounded-md font-bold">${statusText}</span>
+                            </div>
+                            <div class="space-y-3">
+                                <div class="flex justify-between text-base text-[#9db8a6]">
+                                    <span>חברים</span>
+                                    <span class="text-white font-bold">${board.members_count}</span>
+                                </div>
+                                <div class="flex justify-between text-base text-[#9db8a6]">
+                                    <span>ישיבות</span>
+                                    <span class="text-white font-bold">${board.meetings_count}</span>
+                                </div>
+                                <div class="flex justify-between pt-3 border-t border-[#29382e]">
+                                    <span class="text-sm text-[#9db8a6]">${board.description ? board.description.substring(0, 50) + '...' : 'אין תיאור'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('boardsGrid').innerHTML = boardsHtml || '<p class="col-span-full text-center text-[#9db8a6] py-12">לא נמצאו ועדות</p>';
+
+            } catch (error) {
+                console.error('Error loading boards:', error);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Initialize global filter UI
+            await window.globalFilter.waitForInit();
+            window.createGlobalFilterUI('globalFilterContainer');
+
+            // Check if current selection has data
+            const hasData = await window.emptyState.hasData();
+
+            if (!hasData) {
+                // Show empty state message
+                window.emptyState.show('main');
+            } else {
+                // Load normal content
+                loadBoards();
+            }
+        });
+    </script>
+</body>
+</html>

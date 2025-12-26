@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>מועצת יהוד-מונוסון - דשבורד שקיפות</title>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/static/js/global-filter.js"></script>
+    <script src="/static/js/global-filter-ui.js"></script>
+    <script src="/static/js/empty-state.js"></script>
+    <script src="/static/js/category-icons.js"></script>
+    <script src="/static/js/person-avatars.js?v=6"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                        "card-dark": "#1c212c",
+                        "border-dark": "#292e38",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans Hebrew", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Noto Sans Hebrew', 'Public Sans', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111621; }
+        ::-webkit-scrollbar-thumb { background: #292e38; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a4250; }
+    </style>
+</head>
+<body class="bg-background-dark text-white font-display overflow-hidden h-screen flex">
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 h-full bg-background-dark border-l border-border-dark flex flex-col justify-between shrink-0 hidden md:flex">
+        <div class="flex flex-col gap-4 p-4">
+            <div class="flex flex-col px-2 mb-4">
+                <h1 class="text-white text-xl font-bold leading-normal tracking-tight">מועצת יהוד-מונוסון</h1>
+                <p class="text-[#9da6b8] text-sm font-normal">שקיפות ומעורבות</p>
+            </div>
+            <nav class="flex flex-col gap-2">
+                <a class="flex items-center gap-3 px-3 py-3 rounded-lg bg-primary/20 text-primary border border-primary/10" href="/">
+                    <span class="material-symbols-outlined text-xl">home</span>
+                    <span class="text-base font-medium">דף הבית</span>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-3 rounded-lg text-[#9da6b8] hover:bg-[#292e38] hover:text-white transition-colors" href="/persons">
+                    <span class="material-symbols-outlined text-xl">groups</span>
+                    <span class="text-base font-medium">חברי מועצה</span>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-3 rounded-lg text-[#9da6b8] hover:bg-[#292e38] hover:text-white transition-colors" href="/boards">
+                    <span class="material-symbols-outlined text-xl">gavel</span>
+                    <span class="text-base font-medium">ועדות</span>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-3 rounded-lg text-[#9da6b8] hover:bg-[#292e38] hover:text-white transition-colors" href="/discussions">
+                    <span class="material-symbols-outlined text-xl">campaign</span>
+                    <span class="text-base font-medium">החלטות ודיונים</span>
+                </a>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div class="flex flex-col flex-1 h-full overflow-hidden relative">
+        <!-- Top Navigation Bar -->
+        <header class="h-16 flex items-center justify-between px-6 border-b border-border-dark bg-background-dark/95 backdrop-blur shrink-0 z-20">
+            <div class="flex items-center gap-6 flex-1">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-white text-lg font-bold">דשבורד שקיפות</h2>
+                    <!-- Global Filter UI -->
+                    <div id="globalFilterContainer"></div>
+                </div>
+                <div class="relative max-w-md w-full hidden md:block">
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-[#9da6b8]">
+                        <span class="material-symbols-outlined text-2xl">search</span>
+                    </div>
+                    <input class="w-full bg-[#1c212c] border-none text-white text-base rounded-lg focus:ring-1 focus:ring-primary block pr-10 pl-2.5 py-2.5 placeholder-[#5a6275]" placeholder="חיפוש החלטות, פרוטוקולים או חברי מועצה..." type="text"/>
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <main class="flex-1 overflow-y-auto bg-background-dark p-4 md:p-8 pb-20">
+            <div class="max-w-7xl mx-auto flex flex-col gap-8">
+                <!-- Page Heading -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl md:text-4xl font-black text-white mb-2">סקירה כללית</h1>
+                        <p class="text-[#9da6b8] text-base">כל המידע על קבלת ההחלטות בעיר שלך, במקום אחד.</p>
+                    </div>
+                    <!-- Period Selector -->
+                    <div class="flex gap-2">
+                        <select id="filterType" onchange="updateFilterType()" class="bg-[#1c212c] border border-border-dark text-white text-base rounded-lg focus:ring-primary focus:border-primary block px-4 py-3" style="color-scheme: dark;">
+                            <option value="all" style="background-color: #1c212c; color: white;">כל השנים</option>
+                            <option value="year" style="background-color: #1c212c; color: white;">לפי שנה</option>
+                        </select>
+                        <select id="filterValue" onchange="applyFilter()" class="bg-[#1c212c] border border-border-dark text-white text-base rounded-lg focus:ring-primary focus:border-primary block px-4 py-3 hidden" style="color-scheme: dark;">
+                            <!-- Will be populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- KPI Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="statsGrid">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column: Recent Decisions -->
+                    <div class="lg:col-span-2 flex flex-col gap-4">
+                        <div class="flex items-center justify-between pb-2">
+                            <h2 class="text-2xl font-bold text-white">עדכונים אחרונים מהמליאה</h2>
+                            <a class="text-base text-primary font-medium hover:underline flex items-center gap-1" href="/discussions">
+                                <span>צפה בהכל</span>
+                                <span class="material-symbols-outlined text-xl">arrow_back</span>
+                            </a>
+                        </div>
+                        <div id="recentDiscussions">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Council Members & Topics -->
+                    <div class="flex flex-col gap-6">
+                        <!-- Members Widget -->
+                        <div class="bg-card-dark rounded-xl border border-border-dark p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-white font-bold text-xl">חברי המועצה</h3>
+                                <a href="/persons" class="text-[#9da6b8] hover:text-white">
+                                    <span class="material-symbols-outlined text-2xl">arrow_back</span>
+                                </a>
+                            </div>
+                            <div class="grid grid-cols-4 gap-4" id="membersGrid">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Attendance Chart -->
+                        <div class="bg-card-dark rounded-xl border border-border-dark p-5 flex-1">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-white font-bold text-xl">נוכחות בישיבות</h3>
+                                <span id="attendanceChartLabel" class="text-sm text-[#9da6b8]">טוען...</span>
+                            </div>
+                            <div id="attendanceChartContainer" class="h-64 overflow-y-auto">
+                                <!-- Chart will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let periods = { years: [], terms: [] };
+        const termFilter = window.globalTermFilter;
+
+        // Get unique color for each sub-category
+        // Use the same color mapping as the icon system
+        function getSubCategoryColor(subCategoryName) {
+            if (!subCategoryName) return { text: 'text-gray-400', bg: 'bg-gray-500/10' };
+
+            // Get the category style from the icon system (which has all mappings)
+            const categoryStyle = window.getCategoryStyle(subCategoryName);
+
+            // Return just the text and bg colors
+            return {
+                text: categoryStyle.textColor,
+                bg: categoryStyle.bgColor
+            };
+        }
+
+        // Get decision status based on decision text
+        function getDecisionStatus(decisionText) {
+            if (!decisionText) {
+                return {
+                    bg: 'bg-gray-500/10',
+                    text: 'text-gray-400',
+                    border: 'border-gray-500/20',
+                    icon: 'help',
+                    label: 'לא ידוע'
+                };
+            }
+
+            const decision = decisionText.toLowerCase();
+
+            // אושר / approved
+            if (decision.includes('אושר') || decision.includes('התקבל')) {
+                return {
+                    bg: 'bg-green-500/10',
+                    text: 'text-green-500',
+                    border: 'border-green-500/20',
+                    icon: 'check_circle',
+                    label: 'אושר'
+                };
+            }
+
+            // לא אושר / rejected
+            if (decision.includes('לא אושר') || decision.includes('נדחה')) {
+                return {
+                    bg: 'bg-red-500/10',
+                    text: 'text-red-500',
+                    border: 'border-red-500/20',
+                    icon: 'cancel',
+                    label: 'לא אושר'
+                };
+            }
+
+            // ירד מסדר היום
+            if (decision.includes('ירד מסדר היום') || decision.includes('הורד מסדר היום')) {
+                return {
+                    bg: 'bg-orange-500/10',
+                    text: 'text-orange-500',
+                    border: 'border-orange-500/20',
+                    icon: 'event_busy',
+                    label: 'ירד מסדר היום'
+                };
+            }
+
+            // דוח ועדכון
+            if (decision.includes('דוח ועדכון') || decision.includes('דיווח') || decision.includes('עדכון')) {
+                return {
+                    bg: 'bg-blue-500/10',
+                    text: 'text-blue-500',
+                    border: 'border-blue-500/20',
+                    icon: 'description',
+                    label: 'דוח ועדכון'
+                };
+            }
+
+            // לא התקבלה החלטה
+            if (decision.includes('לא התקבלה החלטה') || decision.includes('ללא החלטה')) {
+                return {
+                    bg: 'bg-yellow-500/10',
+                    text: 'text-yellow-500',
+                    border: 'border-yellow-500/20',
+                    icon: 'pending',
+                    label: 'לא התקבלה החלטה'
+                };
+            }
+
+            // בדיון / pending (default)
+            return {
+                bg: 'bg-purple-500/10',
+                text: 'text-purple-500',
+                border: 'border-purple-500/20',
+                icon: 'forum',
+                label: 'בדיון'
+            };
+        }
+
+        // Load available periods
+        async function loadPeriods() {
+            try {
+                const response = await fetch('/api/periods');
+                periods = await response.json();
+
+                // Initialize UI with saved filter
+                initializeFilterUI();
+            } catch (error) {
+                console.error('Error loading periods:', error);
+            }
+        }
+
+        // Initialize filter UI with saved state
+        function initializeFilterUI() {
+            const filterType = document.getElementById('filterType');
+            const filterValueSelect = document.getElementById('filterValue');
+
+            // Always default to 'all' for homepage
+            filterType.value = 'all';
+            filterValueSelect.classList.add('hidden');
+        }
+
+
+        // Update filter value dropdown based on filter type
+        async function updateFilterType() {
+            const filterType = document.getElementById('filterType').value;
+            const filterValueSelect = document.getElementById('filterValue');
+
+            if (filterType === 'all') {
+                filterValueSelect.classList.add('hidden');
+                applyFilter();
+            } else if (filterType === 'year') {
+                // Get years available for the current selected term
+                const currentFilter = window.globalFilter.getFilter();
+                const termNumber = currentFilter.term?.term_number;
+
+                if (termNumber) {
+                    try {
+                        const response = await fetch(`/api/available-years?filter_type=term&filter_value=${termNumber}`);
+                        const data = await response.json();
+                        const years = data.years || [];
+
+                        filterValueSelect.classList.remove('hidden');
+                        filterValueSelect.innerHTML = years.map(year =>
+                            `<option value="${year}" style="background-color: #1c212c; color: white;">${year}</option>`
+                        ).join('');
+
+                        if (years.length > 0) {
+                            applyFilter();
+                        }
+                    } catch (error) {
+                        console.error('Error loading years:', error);
+                    }
+                } else {
+                    filterValueSelect.classList.add('hidden');
+                }
+            }
+        }
+
+        // Apply the selected filter
+        function applyFilter() {
+            const filterType = document.getElementById('filterType').value;
+            const filterValue = document.getElementById('filterValue').value;
+
+            // Reload data with filter
+            // The global filter (term/municipality) is already set
+            // This local filter just adds year filtering on top
+            if (filterType === 'year' && filterValue) {
+                loadStatsForYear(filterValue);
+                loadRecentDiscussionsForYear(filterValue);
+            } else {
+                // Load all years for the selected term
+                loadStats();
+                loadRecentDiscussions();
+            }
+        }
+
+
+        // Fetch and display statistics
+        async function loadStats() {
+            try {
+                const url = window.globalFilter.buildApiUrl('/api/stats');
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Get current term label for display
+                const currentFilter = window.globalFilter.getFilter();
+                const termLabel = currentFilter.term?.label || 'הקדנציה';
+
+                const statsHtml = `
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-green-500/10 text-green-500">
+                                <span class="material-symbols-outlined text-2xl">check_circle</span>
+                            </div>
+                            <span class="text-sm font-medium text-green-500 bg-green-500/10 px-3 py-1.5 rounded-full">${data.attendance_rate}%</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">נוכחות חברי המועצה ל${termLabel}</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.attendance_rate}%</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-blue-500/10 text-blue-500">
+                                <span class="material-symbols-outlined text-2xl">gavel</span>
+                            </div>
+                            <span class="text-sm font-medium text-[#9da6b8] bg-[#292e38] px-3 py-1.5 rounded-full">${termLabel}</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">החלטות הקדנציה</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.total_discussions}</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-purple-500/10 text-purple-500">
+                                <span class="material-symbols-outlined text-2xl">groups</span>
+                            </div>
+                            <span class="text-sm font-medium text-primary bg-primary/10 px-3 py-1.5 rounded-full">פעילים</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">חברי מועצה</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.active_members}</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-orange-500/10 text-orange-500">
+                                <span class="material-symbols-outlined text-2xl">event</span>
+                            </div>
+                            <span class="text-sm font-medium text-orange-500 bg-orange-500/10 px-3 py-1.5 rounded-full">${termLabel}</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">ישיבות הקדנציה</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.meetings_this_year}</h3>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('statsGrid').innerHTML = statsHtml;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Fetch and display statistics for a specific year
+        async function loadStatsForYear(year) {
+            try {
+                const url = window.globalFilter.buildApiUrl(`/api/stats`) + `&year=${year}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const statsHtml = `
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-green-500/10 text-green-500">
+                                <span class="material-symbols-outlined text-2xl">check_circle</span>
+                            </div>
+                            <span class="text-sm font-medium text-green-500 bg-green-500/10 px-3 py-1.5 rounded-full">${data.attendance_rate}%</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">נוכחות חברי המועצה לשנת ${year}</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.attendance_rate}%</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-blue-500/10 text-blue-500">
+                                <span class="material-symbols-outlined text-2xl">gavel</span>
+                            </div>
+                            <span class="text-sm font-medium text-[#9da6b8] bg-[#292e38] px-3 py-1.5 rounded-full">${year}</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">החלטות בשנת ${year}</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.total_discussions}</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-purple-500/10 text-purple-500">
+                                <span class="material-symbols-outlined text-2xl">groups</span>
+                            </div>
+                            <span class="text-sm font-medium text-primary bg-primary/10 px-3 py-1.5 rounded-full">פעילים</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">חברי מועצה</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.active_members}</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-card-dark p-6 rounded-xl border border-border-dark flex flex-col gap-3 group hover:border-primary/50 transition-colors cursor-default">
+                        <div class="flex justify-between items-start">
+                            <div class="p-3 rounded-lg bg-orange-500/10 text-orange-500">
+                                <span class="material-symbols-outlined text-2xl">event</span>
+                            </div>
+                            <span class="text-sm font-medium text-orange-500 bg-orange-500/10 px-3 py-1.5 rounded-full">${year}</span>
+                        </div>
+                        <div>
+                            <p class="text-[#9da6b8] text-base font-medium">ישיבות בשנת ${year}</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.meetings_this_year}</h3>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('statsGrid').innerHTML = statsHtml;
+            } catch (error) {
+                console.error('Error loading stats for year:', error);
+            }
+        }
+
+        // Fetch and display recent discussions
+        async function loadRecentDiscussions() {
+            try {
+                const url = window.globalFilter.buildApiUrl('/api/discussions?limit=5');
+                const response = await fetch(url);
+                const discussions = await response.json();
+
+                const html = discussions.map(d => {
+                    // Get decision status based on the decision text
+                    const status = getDecisionStatus(d.decision);
+
+                    // Get category info
+                    const categoryInfo = d.category;
+                    const categoryStyle = getCategoryStyle(categoryInfo?.child);
+                    const categoryColor = getSubCategoryColor(categoryInfo?.child);
+
+                    return `
+                        <div class="bg-card-dark p-5 rounded-xl border border-border-dark flex flex-col sm:flex-row gap-4 hover:bg-[#232936] transition-colors cursor-pointer" onclick="window.location.href='/discussion/${d.id}'">
+                            <div class="shrink-0 flex items-center justify-center w-14 h-14 rounded-lg ${categoryStyle.bgColor} ${categoryStyle.textColor}">
+                                <span class="material-symbols-outlined text-2xl">${categoryStyle.icon}</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-start mb-2 gap-3">
+                                    <h3 class="text-white font-bold text-xl flex-1">${d.title}</h3>
+                                    <span class="${status.bg} ${status.text} text-sm px-3 py-2 rounded-lg font-semibold border ${status.border} whitespace-nowrap shrink-0 flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">${status.icon}</span>
+                                        ${status.label}
+                                    </span>
+                                </div>
+                                <p class="text-[#9da6b8] text-base leading-relaxed mb-3">${d.decision || 'אין תיאור'}</p>
+                                <div class="flex items-center gap-4 text-sm text-[#6b7280] flex-wrap">
+                                    ${d.board ? `
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">gavel</span>
+                                        ${d.board}
+                                    </span>
+                                    ` : ''}
+                                    ${categoryInfo ? `
+                                    <span class="flex items-center gap-1.5 ${categoryColor.bg} ${categoryColor.text} px-2.5 py-1 rounded-md font-medium">
+                                        <span class="material-symbols-outlined text-lg">category</span>
+                                        <span class="flex flex-col">
+                                            ${categoryInfo.parent ? `<span class="text-xs opacity-70">${categoryInfo.parent}</span>` : ''}
+                                            <span class="text-base">${categoryInfo.child}</span>
+                                        </span>
+                                    </span>
+                                    ` : ''}
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">calendar_today</span>
+                                        ${d.date || 'לא ידוע'}
+                                    </span>
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">how_to_vote</span>
+                                        ${d.votes.yes} בעד, ${d.votes.no} נגד
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('recentDiscussions').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading discussions:', error);
+            }
+        }
+
+        // Fetch and display recent discussions for a specific year
+        async function loadRecentDiscussionsForYear(year) {
+            try {
+                const url = window.globalFilter.buildApiUrl('/api/discussions?limit=5') + `&year=${year}`;
+                const response = await fetch(url);
+                const discussions = await response.json();
+
+                const html = discussions.map(d => {
+                    // Get decision status based on the decision text
+                    const status = getDecisionStatus(d.decision);
+
+                    // Get category info
+                    const categoryInfo = d.category;
+                    const categoryStyle = getCategoryStyle(categoryInfo?.child);
+                    const categoryColor = getSubCategoryColor(categoryInfo?.child);
+
+                    return `
+                        <div class="bg-card-dark p-5 rounded-xl border border-border-dark flex flex-col sm:flex-row gap-4 hover:bg-[#232936] transition-colors cursor-pointer" onclick="window.location.href='/discussion/${d.id}'">
+                            <div class="shrink-0 flex items-center justify-center w-14 h-14 rounded-lg ${categoryStyle.bgColor} ${categoryStyle.textColor}">
+                                <span class="material-symbols-outlined text-2xl">${categoryStyle.icon}</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-start mb-2 gap-3">
+                                    <h3 class="text-white font-bold text-xl flex-1">${d.title}</h3>
+                                    <span class="${status.bg} ${status.text} text-sm px-3 py-2 rounded-lg font-semibold border ${status.border} whitespace-nowrap shrink-0 flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">${status.icon}</span>
+                                        ${status.label}
+                                    </span>
+                                </div>
+                                <p class="text-[#9da6b8] text-base leading-relaxed mb-3">${d.decision || 'אין תיאור'}</p>
+                                <div class="flex items-center gap-4 text-sm text-[#6b7280] flex-wrap">
+                                    ${d.board ? `
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">gavel</span>
+                                        ${d.board}
+                                    </span>
+                                    ` : ''}
+                                    ${categoryInfo ? `
+                                    <span class="flex items-center gap-1.5 ${categoryColor.bg} ${categoryColor.text} px-2.5 py-1 rounded-md font-medium">
+                                        <span class="material-symbols-outlined text-lg">category</span>
+                                        <span class="flex flex-col">
+                                            ${categoryInfo.parent ? `<span class="text-xs opacity-70">${categoryInfo.parent}</span>` : ''}
+                                            <span class="text-base">${categoryInfo.child}</span>
+                                        </span>
+                                    </span>
+                                    ` : ''}
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">calendar_today</span>
+                                        ${d.date || 'לא ידוע'}
+                                    </span>
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">how_to_vote</span>
+                                        ${d.votes.yes} בעד, ${d.votes.no} נגד
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('recentDiscussions').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading discussions for year:', error);
+            }
+        }
+
+        // Fetch and display council members
+        async function loadMembers() {
+            try {
+                const response = await fetch('/api/persons?active=true');
+                let members = await response.json();
+
+                // Sort by role: Mayor → Deputy mayors → Members
+                members = members.sort((a, b) => {
+                    const getRolePriority = (role) => {
+                        if (!role) return 999;
+                        if (role.includes('ראש העיר') && !role.includes('סגן')) return 1;
+                        if (role.includes('סגן ראש העיר')) return 2;
+                        if (role.includes('חבר מועצה')) return 3;
+                        return 999;
+                    };
+
+                    const priorityA = getRolePriority(a.role);
+                    const priorityB = getRolePriority(b.role);
+
+                    if (priorityA !== priorityB) {
+                        return priorityA - priorityB;
+                    }
+                    return a.name.localeCompare(b.name, 'he');
+                });
+
+                // Show first 7 members
+                const displayMembers = members.slice(0, 7);
+                const remaining = Math.max(0, members.length - 7);
+
+                const html = displayMembers.map(m => `
+                    <div class="flex flex-col items-center gap-2 group cursor-pointer" onclick="window.location.href='/person/${m.id}'">
+                        ${getPersonAvatar(m.gender, m.name, 'w-14 h-14', m.role)}
+                        <span class="text-sm text-center text-white truncate w-full">${m.name}</span>
+                    </div>
+                `).join('');
+
+                const viewAllHtml = remaining > 0 ? `
+                    <div class="flex flex-col items-center gap-2 group cursor-pointer" onclick="window.location.href='/persons'">
+                        <div class="w-14 h-14 rounded-full flex items-center justify-center bg-[#292e38] text-white border-2 border-transparent group-hover:border-primary transition-all">
+                            <span class="text-sm font-bold">+${remaining}</span>
+                        </div>
+                        <span class="text-sm text-center text-[#9da6b8] truncate w-full">הצג הכל</span>
+                    </div>
+                ` : '';
+
+                document.getElementById('membersGrid').innerHTML = html + viewAllHtml;
+
+                // Also update attendance chart
+                loadAttendanceChart(members);
+            } catch (error) {
+                console.error('Error loading members:', error);
+            }
+        }
+
+        // Load attendance chart for council members
+        async function loadAttendanceChart(members) {
+            try {
+                // Get selected year from periods
+                const year = periods.years.find(y => y.selected)?.year;
+
+                // Get selected term from periods
+                const selectedTerm = periods.terms.find(t => t.selected);
+
+                // Update label
+                const labelEl = document.getElementById('attendanceChartLabel');
+
+                if (year) {
+                    labelEl.textContent = `שנת ${year}`;
+                } else if (selectedTerm) {
+                    labelEl.textContent = `קדנציה ${selectedTerm.term_number}`;
+                } else {
+                    labelEl.textContent = 'כל השנים';
+                }
+
+                // Create chart with top 10 members (or all if less)
+                const displayMembers = members.slice(0, 10);
+
+                const chartHtml = displayMembers.map(member => {
+                    const attendance = member.attendance_percentage || 0;
+                    const isMayor = member.role && member.role === 'ראש העיר';
+                    const barColor = isMayor ? 'bg-yellow-500' : 'bg-primary';
+                    const barColorLight = isMayor ? 'bg-yellow-500/20' : 'bg-primary/20';
+                    const avatar = window.getPersonAvatar(member.gender, member.name, 'w-8 h-8', member.role);
+                    const firstName = member.name.split(' ')[0];
+
+                    return `
+                        <div class="flex items-center gap-3 mb-3 group cursor-pointer" onclick="window.location.href='/person/${member.id}'">
+                            <div class="flex items-center gap-2 w-32 flex-shrink-0">
+                                ${avatar}
+                                <span class="text-white text-sm truncate">${firstName}</span>
+                            </div>
+                            <div class="flex-1 relative h-8">
+                                <div class="absolute inset-0 ${barColorLight} rounded-full"></div>
+                                <div class="absolute top-0 right-0 h-full ${barColor} rounded-full transition-all group-hover:opacity-80" style="width: ${attendance}%"></div>
+                            </div>
+                            <span class="text-white text-sm font-medium w-12 text-left">${attendance}%</span>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('attendanceChartContainer').innerHTML = chartHtml || '<p class="text-center text-[#9da6b8]">אין נתונים</p>';
+            } catch (error) {
+                console.error('Error loading attendance chart:', error);
+            }
+        }
+
+        // Load data on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Initialize global filter UI
+            await window.globalFilter.waitForInit();
+            window.createGlobalFilterUI('globalFilterContainer');
+
+            // Check if current selection has data
+            const hasData = await window.emptyState.hasData();
+
+            if (!hasData) {
+                // Show empty state message
+                window.emptyState.show('main');
+            } else {
+                // Load normal content
+                await loadPeriods();
+                loadStats();
+                loadRecentDiscussions();
+                loadMembers();
+            }
+        });
+    </script>
+</body>
+</html>

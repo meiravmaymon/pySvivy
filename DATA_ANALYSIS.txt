@@ -1,0 +1,88 @@
+================================================================================
+DATA ANALYSIS - YEHUD-MONOSSON MUNICIPAL FILES
+================================================================================
+
+FILE STRUCTURE:
+===============
+
+1. COUNCIL MEMBERS (מועצה) - 25 rows
+   - id, Title, full_name: Person identifier and name
+   - בעלי תפקידים: Role/Position (e.g., "מועצה>חבר מועצה", "מועצה>ראש העיר")
+   - סיעות: Political party/faction (e.g., "יהוד>יהוד הירוקה", "יהוד>יחד")
+   - degree: Academic degree (e.g., "עו"ד")
+   - start_date, end_date: Term dates
+   - gender: Gender (1 or 2)
+   - authorities_ids: Serialized PHP data with committee assignments
+   - miss_counter: Absence counter
+
+2. DISCUSSIONS (דיונים) - 790 rows
+   - id, Title: Discussion topic
+   - סוג דיון: Discussion type (8 types)
+   - קטגוריות דיון: Discussion categories (29 categories)
+   - issue_no: Issue/Section number (1-25)
+   - expert: Expert opinion/recommendation (HTML content)
+   - desition: Decision text
+   - attendees: Serialized voting data for each member
+   - budgets: Budget information (serialized, 21% have budgets)
+   - yes_counter, no_counter, aviod_counter: Vote counts
+   - discussion_date: Timestamp (8 unique values)
+   - full_date: Full date string
+   - meeting_id: Link to protocol/meeting
+   - confirmed_budget: Confirmed budget amount
+   - missing_counter: Number of absences
+
+3. PROTOCOLS/MEETINGS (פרוטוקולים) - 137 rows
+   - id, Title: Meeting identifier
+   - meeting_no: Meeting number (131 unique)
+   - meeting_date: Meeting date
+   - meeting_desc: Description
+   - attendees: Serialized attendance data (who attended, who was missing)
+   - board_post_id: Link to board/committee
+   - protocol_file: Link to PDF file
+
+4. BOARDS/COMMITTEES (ועדות) - 21 rows
+   - id, Title: Committee name
+   - סוגי ועדות: Committee type (2 types)
+   - start_date, end_date: Committee term dates
+   - board_desc: Committee description
+   - authority_post_id: Authority identifier
+
+KEY INSIGHTS:
+=============
+
+1. ATTENDANCE DATA IS SERIALIZED:
+   - Format: PHP serialized arrays like: a:14:{s:2:"id";s:3:"731";s:4:"name";s:15:"נתן בזיה";...}
+   - Contains: member_id, name, is_missing (0/1)
+   - Need to parse this to extract attendance records
+
+2. VOTING DATA IS EMBEDDED IN ATTENDEES:
+   - Each discussion has attendees field with voting info
+   - Need to parse to extract individual votes
+
+3. RELATIONSHIPS:
+   - Person -> Authorities/Committees (via authorities_ids)
+   - Discussion -> Meeting (via meeting_id)
+   - Meeting -> Board (via board_post_id)
+   - Discussion contains attendees with votes
+
+4. NAME FORMAT:
+   - Full Hebrew names: "הדר מימון", "יעלה מקליס"
+   - Can do exact matching!
+
+5. DATES:
+   - Multiple formats: "2013-01-10 00:00:00", "11/15/2018"
+   - Need normalization
+
+PROPOSED DATABASE SCHEMA:
+==========================
+
+Core Tables:
+1. Person (from file 1)
+2. Board/Committee (from file 4)
+3. Meeting/Protocol (from file 3)
+4. Discussion/Section (from file 2)
+5. Vote (parsed from attendees in file 2)
+6. Attendance (parsed from attendees in file 3)
+7. PersonBoard (many-to-many)
+
+Simplified structure focusing on what we need for the website.

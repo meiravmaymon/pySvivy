@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>פרטי דיון - מועצת העיר</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&family=Noto+Sans+Hebrew:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols_Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-dark": "#111621",
+                        "surface-dark": "#1a2233",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "Noto Sans Hebrew", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Noto Sans Hebrew', 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-background-dark text-white min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-surface-dark/90 backdrop-blur-md border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 md:h-20">
+                <div class="flex items-center gap-4">
+                    <div class="bg-primary/10 p-2 rounded-xl text-primary">
+                        <span class="material-symbols-outlined text-3xl">account_balance</span>
+                    </div>
+                    <span class="text-xl font-display font-bold text-white hidden md:block">מועצת יהוד-מונוסון</span>
+                </div>
+                <nav class="hidden md:flex items-center gap-8">
+                    <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors" href="/">דף הבית</a>
+                    <a class="text-sm font-medium text-primary transition-colors" href="/discussions">דיונים</a>
+                    <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors" href="/persons">חברי מועצה</a>
+                    <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors" href="/boards">ועדות</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow pb-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Breadcrumbs -->
+            <nav class="flex mb-8">
+                <ol class="flex items-center space-x-2 space-x-reverse">
+                    <li>
+                        <a class="text-gray-400 hover:text-gray-300" href="/">
+                            <span class="material-symbols-outlined text-xl">home</span>
+                        </a>
+                    </li>
+                    <li class="flex items-center">
+                        <span class="material-symbols-outlined text-gray-500 text-lg mx-2 rotate-180">chevron_right</span>
+                        <a class="text-sm font-medium text-gray-400 hover:text-gray-300" href="/discussions">דיונים ציבוריים</a>
+                    </li>
+                    <li class="flex items-center">
+                        <span class="material-symbols-outlined text-gray-500 text-lg mx-2 rotate-180">chevron_right</span>
+                        <span class="text-sm font-medium text-primary" id="breadcrumbTitle">טוען...</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <!-- Loading -->
+            <div id="loading" class="text-center py-20">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p class="text-gray-400 mt-4">טוען פרטי דיון...</p>
+            </div>
+
+            <!-- Content -->
+            <div id="content" class="hidden">
+                <!-- Hero Section -->
+                <div class="flex flex-col lg:flex-row gap-8 items-start lg:items-end justify-between mb-10">
+                    <div class="max-w-3xl">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span id="statusBadge" class="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                            </span>
+                            <span class="text-gray-400 text-sm font-medium" id="discussionId"></span>
+                        </div>
+                        <h1 id="discussionTitle" class="text-4xl md:text-5xl font-display font-black text-white leading-tight mb-4 tracking-tight">
+                        </h1>
+                        <p id="discussionDescription" class="text-lg text-gray-400 max-w-2xl leading-relaxed">
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Bento Grid Layout -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <!-- Vote Results (Large Feature) -->
+                    <div class="col-span-1 md:col-span-8 bg-surface-dark rounded-3xl overflow-hidden shadow-sm border border-gray-800 p-8">
+                        <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">how_to_vote</span>
+                            תוצאות ההצבעה
+                        </h3>
+
+                        <div class="grid grid-cols-3 gap-6 mb-8">
+                            <div class="text-center p-6 bg-green-500/10 rounded-2xl border border-green-500/20">
+                                <div class="text-5xl font-bold text-green-400" id="yesCount">0</div>
+                                <div class="text-sm text-gray-400 mt-2">בעד</div>
+                            </div>
+                            <div class="text-center p-6 bg-red-500/10 rounded-2xl border border-red-500/20">
+                                <div class="text-5xl font-bold text-red-400" id="noCount">0</div>
+                                <div class="text-sm text-gray-400 mt-2">נגד</div>
+                            </div>
+                            <div class="text-center p-6 bg-gray-500/10 rounded-2xl border border-gray-500/20">
+                                <div class="text-5xl font-bold text-gray-400" id="avoidCount">0</div>
+                                <div class="text-sm text-gray-400 mt-2">נמנעים</div>
+                            </div>
+                        </div>
+
+                        <!-- Vote Bar -->
+                        <div class="flex h-4 w-full rounded-full overflow-hidden bg-gray-800" id="voteBar">
+                        </div>
+                        <div class="flex justify-between mt-2 text-xs text-gray-500" id="votePercentages">
+                        </div>
+
+                        <!-- Voters List -->
+                        <div class="mt-8">
+                            <h4 class="text-lg font-bold text-white mb-4">פירוט הצבעות</h4>
+                            <div class="space-y-2" id="votersList">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Meeting Info -->
+                    <div class="col-span-1 md:col-span-4 bg-surface-dark p-6 rounded-3xl shadow-sm border border-gray-800 flex flex-col">
+                        <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">event</span>
+                            פרטי הישיבה
+                        </h3>
+                        <div id="meetingInfo" class="space-y-4">
+                        </div>
+                    </div>
+
+                    <!-- Decision Details -->
+                    <div class="col-span-1 md:col-span-12 bg-blue-900/10 p-8 rounded-3xl border border-blue-500/20">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="material-symbols-outlined text-primary text-2xl">gavel</span>
+                            <h3 class="text-xl font-bold text-white">החלטה</h3>
+                        </div>
+                        <div id="decisionText" class="text-gray-300 leading-relaxed">
+                        </div>
+                    </div>
+
+                    <!-- Expert Opinion (if exists) -->
+                    <div id="expertSection" class="col-span-1 md:col-span-12 bg-purple-900/10 p-8 rounded-3xl border border-purple-500/20 hidden">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="material-symbols-outlined text-purple-400 text-2xl">psychology</span>
+                            <h3 class="text-xl font-bold text-white">חוות דעת מקצועית</h3>
+                        </div>
+                        <div id="expertText" class="text-gray-300 leading-relaxed">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const discussionId = {{ discussion_id }};
+
+        async function loadDiscussionDetails() {
+            try {
+                const response = await fetch(`/api/discussion/${discussionId}`);
+                const discussion = await response.json();
+
+                if (discussion.error) {
+                    alert('דיון לא נמצא');
+                    window.location.href = '/discussions';
+                    return;
+                }
+
+                // Breadcrumb
+                document.getElementById('breadcrumbTitle').textContent = discussion.title.substring(0, 40) + '...';
+
+                // Status Badge
+                const statusConfig = {
+                    'approved': { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/20', label: 'אושר', icon: 'check_circle' },
+                    'rejected': { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20', label: 'נדחה', icon: 'cancel' },
+                    'pending': { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20', label: 'בדיון', icon: 'pending' }
+                };
+
+                const totalVotes = discussion.votes.yes + discussion.votes.no + discussion.votes.avoid;
+                const status = discussion.votes.yes > discussion.votes.no ? 'approved' :
+                             discussion.votes.no > discussion.votes.yes ? 'rejected' : 'pending';
+                const statusInfo = statusConfig[status];
+
+                document.getElementById('statusBadge').className = `${statusInfo.bg} ${statusInfo.text} border ${statusInfo.border} px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1`;
+                document.getElementById('statusBadge').innerHTML = `
+                    <span class="w-2 h-2 ${statusInfo.bg.replace('/10', '')} rounded-full animate-pulse"></span>
+                    ${statusInfo.label}
+                `;
+
+                // Title and info
+                document.getElementById('discussionId').textContent = `מזהה דיון: #${discussion.id}`;
+                document.getElementById('discussionTitle').textContent = discussion.title;
+                document.getElementById('discussionDescription').textContent = discussion.decision || 'אין תיאור זמין';
+
+                // Vote counts
+                document.getElementById('yesCount').textContent = discussion.votes.yes;
+                document.getElementById('noCount').textContent = discussion.votes.no;
+                document.getElementById('avoidCount').textContent = discussion.votes.avoid;
+
+                // Vote bar
+                if (totalVotes > 0) {
+                    const yesPercent = Math.round((discussion.votes.yes / totalVotes) * 100);
+                    const noPercent = Math.round((discussion.votes.no / totalVotes) * 100);
+                    const avoidPercent = Math.round((discussion.votes.avoid / totalVotes) * 100);
+
+                    document.getElementById('voteBar').innerHTML = `
+                        <div class="bg-green-500 h-full" style="width: ${yesPercent}%"></div>
+                        <div class="bg-red-500 h-full" style="width: ${noPercent}%"></div>
+                        <div class="bg-gray-500 h-full" style="width: ${avoidPercent}%"></div>
+                    `;
+
+                    document.getElementById('votePercentages').innerHTML = `
+                        <span>${yesPercent}% בעד</span>
+                        <span>${noPercent}% נגד</span>
+                        <span>${avoidPercent}% נמנעים</span>
+                    `;
+                }
+
+                // Voters list
+                const votersHtml = discussion.votes.details.map(v => {
+                    const voteColors = {
+                        'yes': 'bg-green-500/10 text-green-400 border-green-500/20',
+                        'no': 'bg-red-500/10 text-red-400 border-red-500/20',
+                        'avoid': 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+                        'missing': 'bg-gray-700/10 text-gray-500 border-gray-700/20'
+                    };
+                    const voteLabels = { 'yes': 'בעד', 'no': 'נגד', 'avoid': 'נמנע', 'missing': 'נעדר' };
+
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                            <div>
+                                <div class="font-bold text-white">${v.person_name}</div>
+                                <div class="text-xs text-gray-400">${v.person_role || 'חבר מועצה'}</div>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs font-bold border ${voteColors[v.vote]}">
+                                ${voteLabels[v.vote]}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('votersList').innerHTML = votersHtml;
+
+                // Meeting info
+                if (discussion.meeting) {
+                    document.getElementById('meetingInfo').innerHTML = `
+                        <div class="space-y-3">
+                            <div>
+                                <div class="text-xs text-gray-400 mb-1">שם הישיבה</div>
+                                <div class="text-sm font-bold text-white">${discussion.meeting.title}</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-400 mb-1">תאריך</div>
+                                <div class="text-sm font-bold text-white">${discussion.meeting.date || 'לא ידוע'}</div>
+                            </div>
+                            ${discussion.meeting.protocol_file ? `
+                            <a href="${discussion.meeting.protocol_file}" target="_blank" class="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg text-sm font-bold transition-all">
+                                <span class="material-symbols-outlined">description</span>
+                                צפה בפרוטוקול
+                            </a>
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('meetingInfo').innerHTML = '<p class="text-gray-400 text-sm">אין מידע על ישיבה</p>';
+                }
+
+                // Decision
+                document.getElementById('decisionText').innerHTML = discussion.decision || 'אין החלטה רשומה';
+
+                // Expert opinion
+                if (discussion.expert_opinion && discussion.expert_opinion !== 'None') {
+                    document.getElementById('expertSection').classList.remove('hidden');
+                    document.getElementById('expertText').innerHTML = discussion.expert_opinion;
+                }
+
+                // Show content
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error loading discussion details:', error);
+                alert('שגיאה בטעינת פרטי הדיון');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadDiscussionDetails);
+    </script>
+</body>
+</html>

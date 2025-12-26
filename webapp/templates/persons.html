@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>חברי מועצה - יהוד מונוסון</title>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;800&family=Noto+Sans+Hebrew:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/static/js/global-filter.js"></script>
+    <script src="/static/js/global-filter-ui.js"></script>
+    <script src="/static/js/empty-state.js"></script>
+    <script src="/static/js/person-avatars.js?v=4"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-dark": "#111621",
+                        "surface-dark": "#1a2231",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans Hebrew", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Noto Sans Hebrew', 'Public Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-background-dark text-white min-h-screen flex flex-col font-display">
+    <!-- Top Navigation -->
+    <header class="flex items-center justify-between whitespace-nowrap border-b border-slate-800 bg-surface-dark px-10 py-3 sticky top-0 z-50 shadow-sm">
+        <div class="flex items-center gap-8">
+            <div class="flex items-center gap-4">
+                <div class="size-8 text-primary">
+                    <svg fill="currentColor" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M36.7273 44C33.9891 44 31.6043 39.8386 30.3636 33.69C29.123 39.8386 26.7382 44 24 44C21.2618 44 18.877 39.8386 17.6364 33.69C16.3957 39.8386 14.0109 44 11.2727 44C7.25611 44 4 35.0457 4 24C4 12.9543 7.25611 4 11.2727 4C14.0109 4 16.3957 8.16144 17.6364 14.31C18.877 8.16144 21.2618 4 24 4C26.7382 4 29.123 8.16144 30.3636 14.31C31.6043 8.16144 33.9891 4 36.7273 4C40.7439 4 44 12.9543 44 24C44 35.0457 40.7439 44 36.7273 44Z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold leading-tight">מועצת יהוד-מונוסון</h2>
+            </div>
+        </div>
+        <div class="flex flex-1 justify-end gap-8 items-center">
+            <div class="flex items-center gap-9">
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/">ראשי</a>
+                <a class="text-primary text-sm font-bold" href="/persons">חברי מועצה</a>
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/boards">ועדות</a>
+                <a class="text-slate-300 hover:text-primary text-sm font-medium transition-colors" href="/discussions">החלטות</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full max-w-[1400px] mx-auto px-4 md:px-10 py-8">
+        <!-- Page Header -->
+        <div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold text-white mb-2">חברי המועצה</h1>
+                <p class="text-slate-400 max-w-2xl leading-relaxed">
+                    הכירו את חברי מועצת העיר, עקבו אחר פעילותם והצבעותיהם בזמן אמת
+                </p>
+            </div>
+            <!-- Global Filter -->
+            <div id="globalFilterContainer"></div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex flex-wrap gap-3 mb-8">
+            <button onclick="filterMembers('all')" class="filter-btn px-6 py-3 bg-primary text-white rounded-xl font-bold transition-all flex items-center gap-2 text-base" data-filter="all">
+                <span class="material-symbols-outlined text-xl">list</span>
+                הצג הכל
+            </button>
+            <button onclick="filterMembers('active')" class="filter-btn px-6 py-3 bg-slate-800 hover:bg-green-500/20 hover:text-green-400 text-white rounded-xl font-bold transition-all flex items-center gap-2 text-base" data-filter="active">
+                <span class="material-symbols-outlined text-xl">check_circle</span>
+                חברים פעילים
+            </button>
+            <button onclick="filterMembers('inactive')" class="filter-btn px-6 py-3 bg-slate-800 hover:bg-gray-500/20 hover:text-gray-400 text-white rounded-xl font-bold transition-all flex items-center gap-2 text-base" data-filter="inactive">
+                <span class="material-symbols-outlined text-xl">history</span>
+                לשעבר
+            </button>
+        </div>
+
+        <!-- Members Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="membersGrid">
+            <!-- Will be populated by JavaScript -->
+        </div>
+    </main>
+
+    <script>
+        let allMembers = [];
+        let currentFilter = 'all';
+        let periods = { years: [], terms: [] };
+        const termFilter = window.globalTermFilter;
+
+        // Load available periods
+        async function loadPeriods() {
+            try {
+                const response = await fetch('/api/periods');
+                periods = await response.json();
+
+                // Initialize UI with saved filter
+                initializeFilterUI();
+            } catch (error) {
+                console.error('Error loading periods:', error);
+            }
+        }
+
+        // Initialize filter UI with saved state
+        function initializeFilterUI() {
+            const periodType = document.getElementById('periodType');
+            const periodValueSelect = document.getElementById('periodValue');
+            const currentFilter = termFilter.getFilter();
+
+            // Set period type based on saved filter
+            if (currentFilter.type === 'term') {
+                periodType.value = 'term';
+                periodValueSelect.classList.remove('hidden');
+                periodValueSelect.innerHTML = periods.terms.map(term =>
+                    `<option value="${term.term_number}" ${term.term_number == currentFilter.value ? 'selected' : ''}>${term.label}${term.is_current ? ' (נוכחית)' : ''}</option>`
+                ).join('');
+            } else {
+                periodType.value = 'all';
+                periodValueSelect.classList.add('hidden');
+            }
+        }
+
+        // Update period value dropdown based on period type
+        function updatePeriodType() {
+            const periodType = document.getElementById('periodType').value;
+            const periodValueSelect = document.getElementById('periodValue');
+
+            if (periodType === 'all') {
+                periodValueSelect.classList.add('hidden');
+                termFilter.setAll();
+                loadMembers();
+            } else if (periodType === 'term') {
+                periodValueSelect.classList.remove('hidden');
+                periodValueSelect.innerHTML = periods.terms.map(term =>
+                    `<option value="${term.term_number}">${term.label}${term.is_current ? ' (נוכחית)' : ''}</option>`
+                ).join('');
+                const firstTerm = periods.terms[0]?.term_number;
+                const firstLabel = periods.terms[0]?.label;
+                termFilter.setTerm(firstTerm, firstLabel);
+                loadMembers();
+            }
+        }
+
+        // Apply period filter
+        function applyPeriodFilter() {
+            const periodValue = document.getElementById('periodValue').value;
+            const term = periods.terms.find(t => t.term_number == periodValue);
+            termFilter.setTerm(periodValue, term?.label);
+            loadMembers();
+        }
+
+        async function loadMembers() {
+            try {
+                const url = window.globalFilter.buildApiUrl('/api/persons');
+                const response = await fetch(url);
+                allMembers = await response.json();
+                renderMembers();
+            } catch (error) {
+                console.error('Error loading members:', error);
+            }
+        }
+
+        function filterMembers(filter) {
+            currentFilter = filter;
+
+            // Update button styles
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.dataset.filter === filter) {
+                    btn.className = 'filter-btn px-6 py-3 bg-primary text-white rounded-xl font-bold transition-all flex items-center gap-2 text-base';
+                } else {
+                    // Different hover colors based on button type
+                    let hoverClass = 'hover:bg-slate-700';
+                    if (btn.dataset.filter === 'active') {
+                        hoverClass = 'hover:bg-green-500/20 hover:text-green-400';
+                    } else if (btn.dataset.filter === 'inactive') {
+                        hoverClass = 'hover:bg-gray-500/20 hover:text-gray-400';
+                    }
+                    btn.className = `filter-btn px-6 py-3 bg-slate-800 ${hoverClass} text-white rounded-xl font-bold transition-all flex items-center gap-2 text-base`;
+                }
+            });
+
+            renderMembers();
+        }
+
+        function renderMembers() {
+            let filtered = allMembers;
+
+            if (currentFilter === 'active') {
+                filtered = allMembers.filter(m => m.is_active);
+            } else if (currentFilter === 'inactive') {
+                filtered = allMembers.filter(m => !m.is_active);
+            }
+
+            // Sort by role: Mayor (ראש העיר) → Deputy mayors (סגן ראש העיר) → Members (חבר מועצה)
+            filtered = filtered.sort((a, b) => {
+                const getRolePriority = (role) => {
+                    if (!role) return 999; // Unknown role goes last
+                    if (role.includes('ראש העיר') && !role.includes('סגן')) return 1; // Mayor
+                    if (role.includes('סגן ראש העיר')) return 2; // Deputy mayor
+                    if (role.includes('חבר מועצה')) return 3; // Council member
+                    return 999;
+                };
+
+                const priorityA = getRolePriority(a.role);
+                const priorityB = getRolePriority(b.role);
+
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+
+                // If same role, sort alphabetically by name
+                return a.name.localeCompare(b.name, 'he');
+            });
+
+            const html = filtered.map(member => {
+                const statusColor = member.is_active ? 'bg-green-500' : 'bg-gray-500';
+                const statusText = member.is_active ? 'פעיל' : 'לא פעיל';
+
+                return `
+                    <div class="bg-surface-dark rounded-xl p-7 border border-slate-800 shadow-lg hover:border-primary/50 transition-all cursor-pointer group" onclick="window.location.href='/person/${member.id}'">
+                        <div class="flex gap-5 items-start mb-5">
+                            <!-- Avatar -->
+                            <div class="relative shrink-0">
+                                ${getPersonAvatar(member.gender, member.name, 'w-20 h-20', member.role)}
+                                <div class="absolute bottom-0 right-0 ${statusColor} size-5 rounded-full border-3 border-surface-dark" title="${statusText}"></div>
+                            </div>
+
+                            <!-- Info -->
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-2xl font-bold text-white mb-2 truncate group-hover:text-primary transition-colors">${member.name}</h3>
+                                <div class="flex flex-wrap gap-2.5 mb-2">
+                                    <span class="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg text-sm font-bold text-slate-200">
+                                        <span class="material-symbols-outlined text-xl">verified</span>
+                                        ${member.role || 'חבר מועצה'}
+                                    </span>
+                                    ${member.faction ? `
+                                    <span class="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg text-sm font-bold">
+                                        <span class="material-symbols-outlined text-xl">flag</span>
+                                        ${member.faction.split('>')[1] || member.faction}
+                                    </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="grid grid-cols-3 gap-6 pt-5 border-t border-slate-700">
+                            <div class="text-center">
+                                <div class="text-3xl font-bold text-primary mb-1">${member.total_votes}</div>
+                                <div class="text-sm text-slate-400 font-medium">הצבעות</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl font-bold text-green-400 mb-1">${member.attendance_percentage}%</div>
+                                <div class="text-sm text-slate-400 font-medium">נוכחות</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl font-bold text-purple-400 mb-1">${member.boards_count}</div>
+                                <div class="text-sm text-slate-400 font-medium">ועדות</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('membersGrid').innerHTML = html || '<p class="text-slate-400 col-span-full text-center py-12">לא נמצאו חברי מועצה</p>';
+        }
+
+        // Load on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Initialize global filter UI
+            await window.globalFilter.waitForInit();
+            window.createGlobalFilterUI('globalFilterContainer');
+
+            // Check if current selection has data
+            const hasData = await window.emptyState.hasData();
+
+            if (!hasData) {
+                // Show empty state message
+                window.emptyState.show('main');
+            } else {
+                // Load normal content
+                await loadPeriods();
+                loadMembers();
+            }
+        });
+    </script>
+</body>
+</html>

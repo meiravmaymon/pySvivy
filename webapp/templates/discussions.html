@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html class="dark" dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>סקירת החלטות המועצה</title>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700;900&family=Noto+Sans+Hebrew:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols_Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="/static/js/global-filter.js"></script>
+    <script src="/static/js/global-filter-ui.js"></script>
+    <script src="/static/js/empty-state.js"></script>
+    <script src="/static/js/category-icons.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-dark": "#111621",
+                        "surface-dark": "#1C212B",
+                        "border-dark": "#292e38",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans Hebrew", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: "Noto Sans Hebrew", "Public Sans", sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111621; }
+        ::-webkit-scrollbar-thumb { background: #292e38; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3e4552; }
+    </style>
+</head>
+<body class="bg-background-dark text-white min-h-screen flex flex-col font-display">
+    <!-- Top Navbar -->
+    <header class="sticky top-0 z-50 flex items-center justify-between border-b border-border-dark bg-[#111318] px-4 md:px-10 py-3 shadow-md">
+        <div class="flex items-center gap-4 md:gap-8">
+            <div class="flex items-center gap-4 text-white">
+                <div class="size-8 text-white flex items-center justify-center">
+                    <span class="material-symbols-outlined text-3xl">account_balance</span>
+                </div>
+                <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] hidden md:block">מועצת יהוד-מונוסון</h2>
+            </div>
+        </div>
+        <div class="flex flex-1 justify-end gap-4 md:gap-8">
+            <div class="hidden lg:flex items-center gap-6">
+                <a class="text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="/">דף הבית</a>
+                <a class="text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="/persons">חברי מועצה</a>
+                <a class="text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="/boards">ועדות</a>
+                <a class="text-primary text-sm font-medium leading-normal" href="/discussions">החלטות</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 w-full justify-center py-8 px-4 md:px-10">
+        <div class="flex flex-col lg:flex-row w-full max-w-[1280px] gap-8">
+            <!-- Sidebar (Right Column in RTL) -->
+            <aside class="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-6 order-1">
+                <!-- Global Filter -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark shadow-sm">
+                    <h3 class="text-white tracking-light text-lg font-bold leading-tight mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">tune</span>
+                        פילטר ראשי
+                    </h3>
+                    <div id="globalFilterContainer"></div>
+                </div>
+
+                <!-- Year Filter (Secondary) -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark shadow-sm">
+                    <h3 class="text-white tracking-light text-lg font-bold leading-tight mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">calendar_month</span>
+                        סינון לפי שנה
+                    </h3>
+                    <select id="yearFilter" onchange="applyYearFilter()" class="w-full bg-[#111318] border border-border-dark text-white text-base rounded-lg focus:ring-primary focus:border-primary px-4 py-3">
+                        <option value="">כל השנים</option>
+                        <!-- Will be populated dynamically -->
+                    </select>
+                </div>
+
+                <!-- Search Decisions -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark shadow-sm">
+                    <h3 class="text-white tracking-light text-lg font-bold leading-tight mb-4">חיפוש החלטה</h3>
+                    <label class="flex flex-col h-10 w-full mb-4">
+                        <div class="flex w-full flex-1 items-stretch rounded-lg h-12 border border-border-dark bg-[#111318]">
+                            <div class="text-[#9da6b8] flex items-center justify-center pr-4 rounded-r-lg">
+                                <span class="material-symbols-outlined text-2xl">search</span>
+                            </div>
+                            <input id="searchInput" class="w-full bg-transparent text-white border-none focus:ring-0 text-base px-3 placeholder:text-[#5f687a]" placeholder="חיפוש לפי מילות מפתח או מספר החלטה..." onkeyup="filterDiscussions()"/>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark shadow-sm">
+                    <h3 class="text-white tracking-light text-lg font-bold leading-tight mb-4">סינון לפי סטטוס</h3>
+                    <div class="flex flex-col gap-2">
+                        <button onclick="filterByStatus('all')" class="status-filter px-4 py-3 rounded-lg bg-primary/20 text-primary border border-primary/30 text-sm font-bold hover:bg-primary hover:text-white transition-colors flex items-center gap-2" data-status="all">
+                            <span class="material-symbols-outlined text-xl">list</span>
+                            הצג הכל
+                        </button>
+                        <button onclick="filterByStatus('approved')" class="status-filter px-4 py-3 rounded-lg bg-[#292e38] text-[#9da6b8] border border-border-dark text-sm font-bold hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30 transition-colors flex items-center gap-2" data-status="approved">
+                            <span class="material-symbols-outlined text-xl">check_circle</span>
+                            אושרו
+                        </button>
+                        <button onclick="filterByStatus('rejected')" class="status-filter px-4 py-3 rounded-lg bg-[#292e38] text-[#9da6b8] border border-border-dark text-sm font-bold hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors flex items-center gap-2" data-status="rejected">
+                            <span class="material-symbols-outlined text-xl">cancel</span>
+                            נדחו
+                        </button>
+                        <button onclick="filterByStatus('pending')" class="status-filter px-4 py-3 rounded-lg bg-[#292e38] text-[#9da6b8] border border-border-dark text-sm font-bold hover:bg-yellow-500/20 hover:text-yellow-400 hover:border-yellow-500/30 transition-colors flex items-center gap-2" data-status="pending">
+                            <span class="material-symbols-outlined text-xl">pending</span>
+                            בדיון
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <section class="flex-1 flex flex-col gap-6 order-2">
+                <!-- Page Header -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex flex-wrap justify-between items-end gap-4">
+                        <div>
+                            <h1 class="text-white text-3xl md:text-4xl font-black leading-tight tracking-[-0.033em] mb-2">החלטות המועצה</h1>
+                            <p class="text-[#9da6b8] text-lg font-normal leading-normal max-w-2xl">
+                                שקיפות במועצת העיר - צפו בהחלטות, תוצאות הצבעה ופרוטוקולים רשמיים.
+                            </p>
+                        </div>
+                        <!-- Period Selector -->
+                        <div class="flex gap-2">
+                            <select id="filterType" onchange="updateFilterType()" class="bg-[#111318] border border-border-dark text-white text-sm rounded-lg focus:ring-primary focus:border-primary block px-4 py-2.5">
+                                <option value="all">הכל</option>
+                                <option value="year">לפי שנה</option>
+                                <option value="term">לפי קדנציה</option>
+                            </select>
+                            <select id="filterValue" onchange="applyPeriodFilter()" class="bg-[#111318] border border-border-dark text-white text-sm rounded-lg focus:ring-primary focus:border-primary block px-4 py-2.5 hidden">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decision Cards Feed -->
+                <div class="flex flex-col gap-4" id="discussionsContainer">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+
+                <!-- Load More -->
+                <div class="flex justify-center mt-8 mb-10">
+                    <button onclick="loadMore()" id="loadMoreBtn" class="text-[#9da6b8] bg-[#1d232e] border border-border-dark hover:text-white hover:bg-[#2a3241] px-6 py-3 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                        <span class="material-symbols-outlined">refresh</span>
+                        טען החלטות נוספות
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        let allDiscussions = [];
+        let filteredDiscussions = [];
+        let displayedCount = 10;
+        let currentStatus = 'all';
+        let periods = { years: [], terms: [] };
+        const termFilter = window.globalTermFilter;
+
+        // Load available periods
+        async function loadPeriods() {
+            try {
+                const response = await fetch('/api/periods');
+                periods = await response.json();
+
+                // Initialize UI with saved filter
+                initializeFilterUI();
+            } catch (error) {
+                console.error('Error loading periods:', error);
+            }
+        }
+
+        // Initialize filter UI with saved state
+        function initializeFilterUI() {
+            const filterType = document.getElementById('filterType');
+            const filterValueSelect = document.getElementById('filterValue');
+            const currentFilter = termFilter.getFilter();
+
+            // Set filter type
+            filterType.value = currentFilter.type;
+
+            // Populate and show value dropdown if needed
+            if (currentFilter.type === 'year') {
+                filterValueSelect.classList.remove('hidden');
+                filterValueSelect.innerHTML = periods.years.map(year =>
+                    `<option value="${year}" ${year == currentFilter.value ? 'selected' : ''}>${year}</option>`
+                ).join('');
+            } else if (currentFilter.type === 'term') {
+                filterValueSelect.classList.remove('hidden');
+                filterValueSelect.innerHTML = periods.terms.map(term =>
+                    `<option value="${term.term_number}" ${term.term_number == currentFilter.value ? 'selected' : ''}>${term.label}${term.is_current ? ' (נוכחית)' : ''}</option>`
+                ).join('');
+            } else {
+                filterValueSelect.classList.add('hidden');
+            }
+        }
+
+        // Update filter value dropdown based on filter type
+        function updateFilterType() {
+            const filterType = document.getElementById('filterType').value;
+            const filterValueSelect = document.getElementById('filterValue');
+
+            if (filterType === 'all') {
+                filterValueSelect.classList.add('hidden');
+                termFilter.setAll();
+                loadDiscussions();
+            } else if (filterType === 'year') {
+                filterValueSelect.classList.remove('hidden');
+                filterValueSelect.innerHTML = periods.years.map(year =>
+                    `<option value="${year}">${year}</option>`
+                ).join('');
+                const firstYear = periods.years[0];
+                termFilter.setYear(firstYear);
+                loadDiscussions();
+            } else if (filterType === 'term') {
+                filterValueSelect.classList.remove('hidden');
+                filterValueSelect.innerHTML = periods.terms.map(term =>
+                    `<option value="${term.term_number}">${term.label}${term.is_current ? ' (נוכחית)' : ''}</option>`
+                ).join('');
+                const firstTerm = periods.terms[0]?.term_number;
+                const firstLabel = periods.terms[0]?.label;
+                termFilter.setTerm(firstTerm, firstLabel);
+                loadDiscussions();
+            }
+        }
+
+        // Apply period filter
+        function applyPeriodFilter() {
+            const filterType = document.getElementById('filterType').value;
+            const filterValue = document.getElementById('filterValue').value;
+
+            // Save to global filter
+            if (filterType === 'year') {
+                termFilter.setYear(filterValue);
+            } else if (filterType === 'term') {
+                const term = periods.terms.find(t => t.term_number == filterValue);
+                termFilter.setTerm(filterValue, term?.label);
+            }
+
+            loadDiscussions();
+        }
+
+        let selectedYear = '';
+
+        async function loadDiscussions() {
+            try {
+                // Build URL with global filter (term)
+                let url = window.globalFilter.buildApiUrl('/api/discussions?limit=1000');
+
+                // Add year filter if selected
+                if (selectedYear) {
+                    url += `&year=${selectedYear}`;
+                }
+
+                const response = await fetch(url);
+                allDiscussions = await response.json();
+                filteredDiscussions = allDiscussions;
+                displayedCount = 10;
+                filterDiscussions();
+            } catch (error) {
+                console.error('Error loading discussions:', error);
+            }
+        }
+
+        async function loadAvailableYears() {
+            try {
+                // Get available years for current term
+                const url = window.globalFilter.buildApiUrl('/api/available-years');
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const yearSelect = document.getElementById('yearFilter');
+                yearSelect.innerHTML = '<option value="">כל השנים</option>';
+
+                data.years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    yearSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading years:', error);
+            }
+        }
+
+        function applyYearFilter() {
+            selectedYear = document.getElementById('yearFilter').value;
+            loadDiscussions();
+        }
+
+        function filterByStatus(status) {
+            currentStatus = status;
+
+            // Update button styles
+            document.querySelectorAll('.status-filter').forEach(btn => {
+                const icon = btn.querySelector('.material-symbols-outlined');
+                const iconHtml = icon ? icon.outerHTML : '';
+                const text = btn.textContent.trim().replace(/\s+/g, ' ');
+
+                if (btn.dataset.status === status) {
+                    btn.className = 'status-filter px-4 py-3 rounded-lg bg-primary/20 text-primary border border-primary/30 text-sm font-bold hover:bg-primary hover:text-white transition-colors flex items-center gap-2';
+                } else {
+                    // Different hover colors based on button type
+                    let hoverClass = 'hover:bg-[#363c4a] hover:text-white';
+                    if (btn.dataset.status === 'approved') {
+                        hoverClass = 'hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30';
+                    } else if (btn.dataset.status === 'rejected') {
+                        hoverClass = 'hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30';
+                    } else if (btn.dataset.status === 'pending') {
+                        hoverClass = 'hover:bg-yellow-500/20 hover:text-yellow-400 hover:border-yellow-500/30';
+                    }
+                    btn.className = `status-filter px-4 py-3 rounded-lg bg-[#292e38] text-[#9da6b8] border border-border-dark text-sm font-bold ${hoverClass} transition-colors flex items-center gap-2`;
+                }
+            });
+
+            filterDiscussions();
+        }
+
+        function filterDiscussions() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            filteredDiscussions = allDiscussions.filter(d => {
+                const matchesSearch = !searchTerm || d.title.toLowerCase().includes(searchTerm);
+                const matchesStatus = currentStatus === 'all' || d.status === currentStatus;
+                return matchesSearch && matchesStatus;
+            });
+
+            displayedCount = 10;
+            renderDiscussions();
+        }
+
+        function loadMore() {
+            displayedCount += 10;
+            renderDiscussions();
+        }
+
+        function renderDiscussions() {
+            const toDisplay = filteredDiscussions.slice(0, displayedCount);
+
+            const html = toDisplay.map(d => {
+                const statusConfig = {
+                    'approved': {
+                        color: 'green',
+                        borderColor: 'bg-green-500',
+                        bgColor: 'bg-green-500/10',
+                        textColor: 'text-green-400',
+                        label: 'אושר',
+                        icon: 'check_circle'
+                    },
+                    'rejected': {
+                        color: 'red',
+                        borderColor: 'bg-red-500',
+                        bgColor: 'bg-red-500/10',
+                        textColor: 'text-red-400',
+                        label: 'נדחה',
+                        icon: 'cancel'
+                    },
+                    'pending': {
+                        color: 'gray',
+                        borderColor: 'bg-[#9da6b8]',
+                        bgColor: 'bg-[#292e38]',
+                        textColor: 'text-[#9da6b8]',
+                        label: 'בדיון',
+                        icon: 'pending'
+                    }
+                };
+
+                const status = statusConfig[d.status] || statusConfig.pending;
+                const totalVotes = d.votes.yes + d.votes.no + d.votes.avoid;
+                const yesPercent = totalVotes > 0 ? Math.round((d.votes.yes / totalVotes) * 100) : 0;
+                const noPercent = totalVotes > 0 ? Math.round((d.votes.no / totalVotes) * 100) : 0;
+                const avoidPercent = totalVotes > 0 ? Math.round((d.votes.avoid / totalVotes) * 100) : 0;
+
+                // Get category badges
+                const categoryBadges = d.categories && d.categories.length > 0
+                    ? d.categories.slice(0, 2).map(cat => createCategoryBadge(cat.name, true)).join(' ')
+                    : '';
+
+                return `
+                    <article class="group bg-surface-dark hover:bg-[#232936] transition-colors rounded-xl p-6 md:p-7 border border-border-dark flex flex-col gap-5 relative overflow-hidden cursor-pointer" onclick="window.location.href='/discussion/${d.id}'">
+                        <div class="absolute top-0 left-0 w-1.5 h-full ${status.borderColor}"></div>
+                        <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+                            <div class="flex-1">
+                                <div class="flex items-center flex-wrap gap-2.5 mb-3">
+                                    <span class="bg-[#292e38] text-[#9da6b8] text-xs font-bold px-3 py-1 rounded-lg border border-border-dark">החלטה #${d.id}</span>
+                                    <span class="text-[#9da6b8] text-sm flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-lg">calendar_today</span>
+                                        ${d.date || 'לא ידוע'}
+                                    </span>
+                                    ${categoryBadges}
+                                </div>
+                                <h3 class="text-white text-2xl font-bold leading-tight group-hover:text-primary transition-colors mb-2">${d.title}</h3>
+                                <p class="text-[#cbd2e0] mt-2 text-base leading-relaxed max-w-3xl line-clamp-2">
+                                    ${d.decision || 'אין תיאור זמין'}
+                                </p>
+                            </div>
+                            <div class="flex flex-col items-end gap-2 min-w-[140px]">
+                                <span class="${status.bgColor} ${status.textColor} border border-${status.color}-500/20 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-xl">${status.icon}</span>
+                                    ${status.label}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Voting Visuals -->
+                        ${totalVotes > 0 ? `
+                        <div class="bg-[#111318] rounded-xl p-4 md:p-5 border border-border-dark">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-white text-sm font-bold flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-xl">how_to_vote</span>
+                                    תוצאות ההצבעה
+                                </span>
+                                <div class="flex gap-4 text-sm">
+                                    <span class="text-green-400 font-bold">בעד: ${d.votes.yes}</span>
+                                    <span class="text-red-400 font-bold">נגד: ${d.votes.no}</span>
+                                    <span class="text-[#9da6b8] font-bold">נמנעים: ${d.votes.avoid}</span>
+                                </div>
+                            </div>
+                            <div class="flex h-2.5 w-full rounded-full overflow-hidden bg-[#292e38]">
+                                <div class="bg-green-500" style="width: ${yesPercent}%" title="${yesPercent}% בעד"></div>
+                                <div class="bg-red-500" style="width: ${noPercent}%" title="${noPercent}% נגד"></div>
+                                <div class="bg-[#5f687a]" style="width: ${avoidPercent}%" title="${avoidPercent}% נמנעים"></div>
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <div class="flex justify-end items-center gap-4 mt-1 border-t border-border-dark/50 pt-4">
+                            <button class="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 hover:border-primary px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all" onclick="event.stopPropagation(); window.location.href='/discussion/${d.id}'">
+                                צפה בפרטים
+                                <span class="material-symbols-outlined text-[18px] rotate-180">arrow_right_alt</span>
+                            </button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            document.getElementById('discussionsContainer').innerHTML = html || '<p class="text-center text-[#9da6b8] py-12">לא נמצאו החלטות</p>';
+
+            // Show/hide load more button
+            document.getElementById('loadMoreBtn').style.display = displayedCount >= filteredDiscussions.length ? 'none' : 'flex';
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Initialize global filter UI
+            await window.globalFilter.waitForInit();
+            window.createGlobalFilterUI('globalFilterContainer');
+
+            // Check if current selection has data
+            const hasData = await window.emptyState.hasData();
+
+            if (!hasData) {
+                // Show empty state message
+                window.emptyState.show('.flex.flex-1');
+            } else {
+                // Load normal content
+                await loadAvailableYears();
+                await loadPeriods();
+                loadDiscussions();
+            }
+        });
+    </script>
+</body>
+</html>
