@@ -968,7 +968,8 @@ class ValidationSession:
                     new_person = Person(
                         full_name=person_data['name'],
                         role_id=role_id,
-                        start_date=person_data['start_date']
+                        start_date=person_data['start_date'],
+                        municipality_id=self.municipality_id if hasattr(self, 'municipality_id') else None
                     )
                     session.add(new_person)
                     session.flush()  # לקבל ID

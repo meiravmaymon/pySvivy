@@ -381,11 +381,12 @@ class DBActionAgent:
         ).first()
 
         if not person:
-            # יצירת אדם חדש
+            # יצירת אדם חדש עם עיר
             person = Person(
                 full_name=person_name,
                 title=person_name,
-                start_date=datetime.strptime(start_date_str, '%Y-%m-%d') if start_date_str != 'CURRENT_DATE' else datetime.now()
+                start_date=datetime.strptime(start_date_str, '%Y-%m-%d') if start_date_str != 'CURRENT_DATE' else datetime.now(),
+                municipality_id=self.municipality_id if hasattr(self, 'municipality_id') else None
             )
             session.add(person)
             session.flush()

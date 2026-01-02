@@ -447,7 +447,7 @@
 
                 <!-- Bottom Actions -->
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/step/4b" class="btn btn-outline-secondary">
+                    <a href="/step/4b?sid={{ sid }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-right"></i>
                         חזור להשוואת שדות
                     </a>
@@ -470,6 +470,8 @@
 
 {% block extra_js %}
 <script>
+const SID = '{{ sid }}';
+
 function toggleUnmatched(header) {
     const body = header.nextElementSibling;
     body.classList.toggle('show');

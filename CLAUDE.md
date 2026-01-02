@@ -163,6 +163,45 @@ session.load_meeting(82)      # Load meeting from DB
 session.apply_changes()       # Save to database
 ```
 
+### Web-based OCR Validation (5-step workflow)
+```
+Step 1: פרטי ישיבה - Meeting details (date, type, number)
+Step 2: נוכחות - Attendance matching (OCR vs DB)
+Step 3: סגל - Staff validation (new attendees)
+Step 4: דיונים - Discussion comparison and matching
+Step 5: סיום - Atomic save (all-or-nothing commit)
+```
+
+### Session Management (Multi-tab Support)
+```python
+# Each browser tab gets a unique session ID (sid)
+sid = request.args.get('sid') or str(uuid.uuid4())
+
+# Session data stored in memory (session_store dict)
+session_data = {
+    'extracted': {...},           # OCR results
+    'meeting_id': int,            # Matched meeting
+    'pending_changes': {...},     # Atomic save buffer
+    'validation_complete': False  # Finalization status
+}
+```
+
+### Atomic Saves (Pending Changes)
+```python
+# Changes are buffered in session until finalization
+pending_changes = {
+    'meeting': {'meeting_no': str, 'meeting_date': date},
+    'attendances': {person_id: {'is_present': bool}},
+    'staff': [{'name': str, 'role': str}],
+    'discussions': {disc_id: {'fields': {...}}},
+    'new_discussions': [{'issue_no': str, 'title': str}]
+}
+
+# Finalize: atomic commit or rollback
+POST /api/finalize_validation
+POST /api/discard_validation
+```
+
 ### LLM Helper Usage
 ```python
 from llm_helper import extract_decision_with_llm, classify_discussion
@@ -183,6 +222,24 @@ fixed = fix_reversed_numbers("000,052")  # → "250,000"
 # Extract funding sources
 sources = extract_funding_sources(text)
 # → [{'name': 'משרד החינוך', 'amount': 300000}, ...]
+```
+
+### Smart Name Matching (with Reversal Detection)
+```python
+from ocr_web_app import names_match
+
+# Checks both normal and reversed versions (Hebrew OCR issue)
+matched, was_reversed, matched_name = names_match(
+    "ןהכ לחר",      # OCR extracted (reversed)
+    "רחל כהן",       # From database
+    return_details=True
+)
+# → (True, True, "רחל כהן")
+
+# Strict matching rules:
+# - Two-word names require BOTH words to match
+# - Single word must be first name or unique identifier
+# - Prevents false positives like "חיים מימון" ↔ "הדר מימון"
 ```
 
 ## Important Conventions
@@ -237,6 +294,7 @@ ollama pull gemma3:1b
 
 ## API Endpoints
 
+### Statistics & Data
 | Endpoint | Description |
 |----------|-------------|
 | GET /api/stats | General statistics |
@@ -247,6 +305,25 @@ ollama pull gemma3:1b
 | GET /api/boards | Committee list |
 | GET /api/discussions | Discussion items |
 | GET /api/meetings | Protocol sessions |
+
+### OCR Validation (Web App)
+| Endpoint | Description |
+|----------|-------------|
+| GET /step/1?sid=xxx | Meeting details validation |
+| GET /step/2?sid=xxx | Attendance matching |
+| GET /step/3?sid=xxx | Staff validation |
+| GET /step/4a?sid=xxx | Discussion list comparison |
+| GET /step/4b/<id>?sid=xxx | Individual discussion details |
+| GET /step/4c?sid=xxx | Unmatched discussions |
+| GET /step/5?sid=xxx | Finalization summary |
+| POST /api/update_meeting | Save meeting changes (to session) |
+| POST /api/update_attendance | Save attendance changes (to session) |
+| POST /api/save_staff | Save new staff (to session) |
+| POST /api/save_comparison | Save discussion edits (to session) |
+| POST /api/finalize_validation | Atomic commit all changes |
+| POST /api/discard_validation | Discard all pending changes |
+| GET /api/pending_count?sid=xxx | Count of uncommitted changes |
+| GET /api/move_to_processed?sid=xxx | Move PDF to processed folder |
 
 ## Agent System
 
@@ -382,8 +459,25 @@ alembic downgrade -1
 alembic history
 ```
 
+## Recent Updates (January 2026)
+
+### v2.1 - OCR Validation Web App Improvements
+- **Atomic Saves**: Changes buffered in session until explicit finalization
+- **Multi-tab Support**: Each browser tab gets unique session ID (sid)
+- **Smart Name Matching**: Auto-detects reversed Hebrew text from OCR
+- **Stricter Matching**: Prevents false positives on shared surnames
+- **UI Improvements**: Reverse buttons for names/roles, visual indicators for reversed matches
+- **5-Step Workflow**: Meeting → Attendance → Staff → Discussions → Finalize
+
+### Key Files Changed
+- `ocr_web_app.py` - Session management, atomic saves, improved name matching
+- `templates/step2_attendance.html` - Reversed match indicators
+- `templates/step3_staff.html` - Manual text reversal buttons
+- `templates/step5_finalize.html` - Summary and commit page
+- `templates/base.html` - Pending changes indicator in navbar
+
 ---
 
 **Municipality**: Yehud-Monosson (יהוד-מונוסון)
-**Version**: 2.0
-**Last Updated**: January 2025
+**Version**: 2.1
+**Last Updated**: January 2026

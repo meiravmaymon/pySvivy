@@ -127,6 +127,46 @@
         .status-approved { background: #c6f6d5; color: #22543d; }
         .status-modified { background: #e9d8fd; color: #553c9a; }
 
+        /* Pending changes indicator */
+        .pending-indicator {
+            background: #f6ad55;
+            color: #744210;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .pending-warning {
+            background: #fef3c7;
+            border: 1px solid #f6ad55;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pending-warning .btn-finalize {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+        }
+        .pending-warning .btn-discard {
+            background: #fc8181;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            margin-right: 10px;
+        }
+
         .discussion-card {
             border-right: 4px solid #3182ce;
             transition: all 0.3s;
@@ -177,12 +217,18 @@
                 <i class="bi bi-file-earmark-text"></i>
                 ולידציית פרוטוקולים - מועצת העיר
             </a>
-            {% if session.get('meeting_id') %}
-            <span class="navbar-text text-light">
-                <i class="bi bi-calendar-event"></i>
-                ישיבה {{ session.get('meeting_no', '') }}
-            </span>
-            {% endif %}
+            <div class="d-flex align-items-center">
+                {% if session.get('meeting_id') %}
+                <span class="navbar-text text-light me-3">
+                    <i class="bi bi-calendar-event"></i>
+                    ישיבה {{ session.get('meeting_no', '') }}
+                </span>
+                {% endif %}
+                <span id="pendingBadge" class="pending-indicator" style="display: none;">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span id="pendingCount">0</span> שינויים ממתינים
+                </span>
+            </div>
         </div>
     </nav>
 
@@ -190,21 +236,25 @@
     {% if session.get('meeting_id') %}
     <div class="container">
         <div class="step-indicator">
-            <a href="/step/1" class="step {% if request.path == '/step/1' %}active{% endif %}">
+            <a href="/step/1?sid={{ sid }}" class="step {% if request.path == '/step/1' %}active{% endif %}">
                 <span class="step-number">1</span>
                 פרטי ישיבה
             </a>
-            <a href="/step/2" class="step {% if request.path == '/step/2' %}active{% endif %}">
+            <a href="/step/2?sid={{ sid }}" class="step {% if request.path == '/step/2' %}active{% endif %}">
                 <span class="step-number">2</span>
                 נוכחות
             </a>
-            <a href="/step/3" class="step {% if request.path == '/step/3' %}active{% endif %}">
+            <a href="/step/3?sid={{ sid }}" class="step {% if request.path == '/step/3' %}active{% endif %}">
                 <span class="step-number">3</span>
                 סגל
             </a>
-            <a href="/step/4" class="step {% if '/step/4' in request.path or request.path.startswith('/step/4') %}active{% endif %}">
+            <a href="/step/4a?sid={{ sid }}" class="step {% if '/step/4' in request.path and '/step/5' not in request.path %}active{% endif %}">
                 <span class="step-number">4</span>
                 דיונים
+            </a>
+            <a href="/step/5?sid={{ sid }}" class="step {% if request.path == '/step/5' %}active{% endif %}" id="step5Link">
+                <span class="step-number">5</span>
+                סיום
             </a>
         </div>
     </div>
@@ -308,6 +358,101 @@
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
+
+        // Get SID from URL or global variable
+        function getSid() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('sid') || (typeof SID !== 'undefined' ? SID : '');
+        }
+
+        // Update pending changes indicator
+        function updatePendingIndicator() {
+            const sid = getSid();
+            if (!sid) return;
+
+            fetch(`/api/pending_count?sid=${sid}`)
+                .then(response => response.json())
+                .then(data => {
+                    const badge = document.getElementById('pendingBadge');
+                    const countSpan = document.getElementById('pendingCount');
+                    const step5Link = document.getElementById('step5Link');
+
+                    if (data.count > 0) {
+                        badge.style.display = 'inline-block';
+                        countSpan.textContent = data.count;
+                        if (step5Link) {
+                            step5Link.classList.add('pending-highlight');
+                        }
+                    } else {
+                        badge.style.display = 'none';
+                        if (step5Link) {
+                            step5Link.classList.remove('pending-highlight');
+                        }
+                    }
+                })
+                .catch(err => console.log('Error updating pending count:', err));
+        }
+
+        // Finalize validation
+        function finalizeValidation() {
+            if (!confirm('האם לשמור את כל השינויים לבסיס הנתונים?')) return;
+
+            showLoading('שומר שינויים...');
+            const sid = getSid();
+
+            fetch('/api/finalize_validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sid: sid })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    updatePendingIndicator();
+                    // Optionally redirect or show completion message
+                    setTimeout(() => {
+                        window.location.href = '/api/move_to_processed?sid=' + sid;
+                    }, 1500);
+                } else {
+                    showToast('שגיאה: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showToast('שגיאה בשמירה: ' + error, 'danger');
+            });
+        }
+
+        // Discard all changes
+        function discardValidation() {
+            if (!confirm('האם לבטל את כל השינויים? פעולה זו לא ניתנת לביטול!')) return;
+
+            const sid = getSid();
+
+            fetch('/api/discard_validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sid: sid })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'warning');
+                    updatePendingIndicator();
+                    window.location.href = '/?sid=' + sid;
+                }
+            })
+            .catch(error => {
+                showToast('שגיאה: ' + error, 'danger');
+            });
+        }
+
+        // Update indicator on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePendingIndicator();
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

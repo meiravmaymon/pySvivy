@@ -356,7 +356,7 @@
 
                 <!-- Bottom Actions -->
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/step/3" class="btn btn-outline-secondary">
+                    <a href="/step/3?sid={{ sid }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-right"></i>
                         חזור לסגל
                     </a>
@@ -691,6 +691,8 @@ function skipToDetails() {
     proceedToComparison();
 }
 
+const SID = '{{ sid }}';
+
 async function proceedToComparison() {
     showLoading();
 
@@ -701,13 +703,14 @@ async function proceedToComparison() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 manual_matches: manualMatches,
-                unlinked_auto: unlinkedAuto  // Send unlinked auto-matches
+                unlinked_auto: unlinkedAuto,  // Send unlinked auto-matches
+                sid: SID
             })
         });
 
         const result = await response.json();
         if (result.success) {
-            window.location.href = '/step/4b';
+            window.location.href = '/step/4b?sid=' + SID;
         } else {
             hideLoading();
             showToast(result.error || 'שגיאה בשמירה', 'danger');

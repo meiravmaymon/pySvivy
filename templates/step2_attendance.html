@@ -89,6 +89,10 @@
         font-style: italic;
         padding: 10px;
     }
+    .reversed-match {
+        border-color: #fd7e14 !important;
+        background: linear-gradient(135deg, #d1e7dd 0%, #fff3cd 100%) !important;
+    }
 </style>
 {% endblock %}
 
@@ -126,7 +130,13 @@
                     <strong>הוראות:</strong>
                     <ul class="mb-0 mt-2">
                         <li><strong>תואם</strong> - השם מופיע בשני המקורות, לא נדרשת פעולה</li>
-                        <li><strong>רק ב-OCR</strong> - השם זוהה בקובץ אך לא נמצא בבסיס הנתונים. לחץ 🔗 להתאמה או ✗ להתעלמות</li>
+                        <li><strong>רק ב-OCR</strong> - השם זוהה בקובץ אך לא נמצא בבסיס הנתונים:
+                            <ul>
+                                <li><i class="bi bi-arrow-left-right text-warning"></i> <strong>הפוך</strong> - אם השם הפוך, לחץ להפיכה</li>
+                                <li><i class="bi bi-link text-success"></i> <strong>התאם</strong> - להתאמה ידנית לאדם קיים</li>
+                                <li><i class="bi bi-x"></i> <strong>התעלם</strong> - להתעלמות מהשם</li>
+                            </ul>
+                        </li>
                         <li><strong>רק בבסיס נתונים</strong> - השם קיים בבסיס הנתונים אך לא זוהה ב-OCR. לחץ על הכפתור לשינוי הסטטוס</li>
                     </ul>
                 </div>
@@ -148,11 +158,14 @@
                         <h6 class="text-success"><i class="bi bi-check-all"></i> תואמים ({{ matched_present|length }})</h6>
                         <div id="matchedPresent" class="d-flex flex-wrap">
                             {% for match in matched_present %}
-                            <div class="matched-badge">
+                            <div class="matched-badge {% if match.was_reversed %}reversed-match{% endif %}">
+                                {% if match.was_reversed %}
+                                <i class="bi bi-arrow-left-right text-warning me-1" title="נמצא הפוך"></i>
+                                {% endif %}
                                 <i class="bi bi-check text-success me-2"></i>
                                 <div class="names">
-                                    {% if match.ocr_name != match.db_name %}
-                                    <span class="ocr-name">{{ match.ocr_name }}</span>
+                                    {% if match.ocr_name != match.db_name or match.was_reversed %}
+                                    <span class="ocr-name">{{ match.ocr_name }}{% if match.was_reversed %} (הפוך){% endif %}</span>
                                     {% endif %}
                                     <span class="db-name">{{ match.db_name }}</span>
                                 </div>
@@ -173,8 +186,12 @@
                             <div id="ocrOnlyPresent">
                                 {% for ocr_item in ocr_only_present %}
                                 <div class="person-card ocr-only" data-name="{{ ocr_item.name }}">
-                                    <span>{{ ocr_item.name }}</span>
+                                    <span class="name-display">{{ ocr_item.name }}</span>
                                     <div class="action-buttons">
+                                        <button class="btn btn-sm btn-warning reverse-name-btn"
+                                                title="הפוך שם">
+                                            <i class="bi bi-arrow-left-right"></i>
+                                        </button>
                                         <button class="btn btn-sm btn-outline-success match-btn"
                                                 data-name="{{ ocr_item.name }}"
                                                 data-type="present"
@@ -237,11 +254,14 @@
                         <h6 class="text-success"><i class="bi bi-check-all"></i> תואמים ({{ matched_absent|length }})</h6>
                         <div id="matchedAbsent" class="d-flex flex-wrap">
                             {% for match in matched_absent %}
-                            <div class="matched-badge" style="background: #f8f9fa; border-color: #6c757d;">
+                            <div class="matched-badge {% if match.was_reversed %}reversed-match{% endif %}" style="background: #f8f9fa; border-color: #6c757d;">
+                                {% if match.was_reversed %}
+                                <i class="bi bi-arrow-left-right text-warning me-1" title="נמצא הפוך"></i>
+                                {% endif %}
                                 <i class="bi bi-check text-secondary me-2"></i>
                                 <div class="names">
-                                    {% if match.ocr_name != match.db_name %}
-                                    <span class="ocr-name">{{ match.ocr_name }}</span>
+                                    {% if match.ocr_name != match.db_name or match.was_reversed %}
+                                    <span class="ocr-name">{{ match.ocr_name }}{% if match.was_reversed %} (הפוך){% endif %}</span>
                                     {% endif %}
                                     <span class="db-name">{{ match.db_name }}</span>
                                 </div>
@@ -262,8 +282,12 @@
                             <div id="ocrOnlyAbsent">
                                 {% for ocr_item in ocr_only_absent %}
                                 <div class="person-card ocr-only" data-name="{{ ocr_item.name }}">
-                                    <span>{{ ocr_item.name }}</span>
+                                    <span class="name-display">{{ ocr_item.name }}</span>
                                     <div class="action-buttons">
+                                        <button class="btn btn-sm btn-warning reverse-name-btn"
+                                                title="הפוך שם">
+                                            <i class="bi bi-arrow-left-right"></i>
+                                        </button>
                                         <button class="btn btn-sm btn-outline-success match-btn"
                                                 data-name="{{ ocr_item.name }}"
                                                 data-type="absent"
@@ -340,11 +364,11 @@
                 </div>
 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/step/1" class="btn btn-outline-secondary">
+                    <a href="/step/1?sid={{ sid }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-right"></i>
                         חזור לפרטי ישיבה
                     </a>
-                    <a href="/step/3" class="btn btn-primary btn-lg">
+                    <a href="/step/3?sid={{ sid }}" class="btn btn-primary btn-lg">
                         המשך לסגל
                         <i class="bi bi-arrow-left"></i>
                     </a>
@@ -385,6 +409,11 @@
 let currentMatchElement = null;
 let currentMatchType = null;
 let allPersons = [];
+
+// Reverse Hebrew text
+function reverseText(text) {
+    return text.split('').reverse().join('');
+}
 
 // Load all persons on page load
 document.addEventListener('DOMContentLoaded', async function() {
@@ -434,6 +463,30 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelectorAll('.confirm-absent-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             confirmAbsent(this);
+        });
+    });
+
+    // Reverse name buttons
+    document.querySelectorAll('.reverse-name-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const card = this.closest('.person-card');
+            const nameSpan = card.querySelector('.name-display');
+            const currentName = nameSpan.textContent;
+            const reversedName = reverseText(currentName);
+
+            // Update display
+            nameSpan.textContent = reversedName;
+
+            // Update data attribute
+            card.dataset.name = reversedName;
+
+            // Update match button data
+            const matchBtn = card.querySelector('.match-btn');
+            if (matchBtn) {
+                matchBtn.dataset.name = reversedName;
+            }
+
+            showToast('השם הופך: ' + reversedName);
         });
     });
 

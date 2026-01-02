@@ -690,7 +690,7 @@
 
                 <!-- Bottom Actions -->
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/step/4a" class="btn btn-outline-secondary">
+                    <a href="/step/4a?sid={{ sid }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-right"></i>
                         חזור לקישור
                     </a>
@@ -713,6 +713,8 @@
 
 {% block extra_js %}
 <script>
+const SID = '{{ sid }}';
+
 function toggleComparison(header) {
     const body = header.nextElementSibling;
     body.classList.toggle('show');
@@ -958,6 +960,7 @@ async function saveComparison(btn) {
     const card = btn.closest('.comparison-card');
     const data = getComparisonData(card);
 
+    data.sid = SID;
     try {
         const response = await fetch('/api/save_comparison', {
             method: 'POST',
@@ -991,6 +994,7 @@ async function saveAll() {
 
     for (const card of cards) {
         const data = getComparisonData(card);
+        data.sid = SID;
         try {
             const response = await fetch('/api/save_comparison', {
                 method: 'POST',
@@ -1014,7 +1018,7 @@ async function saveAll() {
 }
 
 function proceedToUnmatched() {
-    window.location.href = '/step/4c';
+    window.location.href = '/step/4c?sid=' + SID;
 }
 
 // Summary approval functionality

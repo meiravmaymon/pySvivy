@@ -1,9 +1,10 @@
 """
-Database models for Yehud-Monosson Municipal Decision System.
+Database models for Municipal Decision System - Svivy.
 
-מודל בסיס הנתונים למערכת החלטות מועצת העיר יהוד-מונוסון
+מודל בסיס הנתונים למערכת החלטות מועצות רשויות מקומיות - סביבי
 
 Tables:
+    - municipalities: רשויות מקומיות (עיריות, מועצות מקומיות, מועצות אזוריות)
     - terms: קדנציות (תקופות כהונה)
     - persons: חברי מועצה וסגל
     - roles: תפקידים (היררכי)
@@ -23,6 +24,36 @@ from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
 Base = declarative_base()
+
+
+class Municipality(Base):
+    """
+    Municipality / Local Authority (רשות מקומית)
+
+    Supports:
+    - עירייה (City Municipality)
+    - מועצה מקומית (Local Council)
+    - מועצה אזורית (Regional Council)
+    """
+    __tablename__ = 'municipalities'
+
+    id = Column(Integer, primary_key=True)
+    semel = Column(String(10), unique=True, index=True)  # סמל יישוב - CBS code (e.g., 6600 for Yehud)
+    name_he = Column(String(200), nullable=False, index=True)  # שם בעברית
+    name_en = Column(String(200))  # English name
+    municipality_type = Column(String(50))  # עירייה / מועצה מקומית / מועצה אזורית
+    region = Column(String(100))  # מחוז / אזור
+    created_date = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    terms = relationship('Term', back_populates='municipality')
+    persons = relationship('Person', back_populates='municipality')
+    boards = relationship('Board', back_populates='municipality')
+    meetings = relationship('Meeting', back_populates='municipality')
+
+    def __repr__(self):
+        return f"<Municipality(name='{self.name_he}', semel='{self.semel}')>"
+
 
 # Many-to-many relationship table for Person and Board
 person_board = Table('person_board', Base.metadata,
@@ -56,12 +87,16 @@ class Term(Base):
     __tablename__ = 'terms'
 
     id = Column(Integer, primary_key=True)
-    term_number = Column(Integer, nullable=False, unique=True, index=True)  # 15, 16, 17
+    term_number = Column(Integer, nullable=False, index=True)  # 15, 16, 17
     start_date = Column(DateTime, nullable=False)  # Election start date
     end_date = Column(DateTime, nullable=False)  # Next election date
     is_current = Column(Integer, default=0)  # 1 if current term
 
+    # Foreign key to municipality
+    municipality_id = Column(Integer, ForeignKey('municipalities.id'), nullable=True)
+
     # Relationships
+    municipality = relationship('Municipality', back_populates='terms')
     meetings = relationship('Meeting', back_populates='term')
 
     def __repr__(self):
@@ -105,21 +140,42 @@ class DiscussionType(Base):
 
 
 class Faction(Base):
-    """Hierarchical faction/party (סיעות) - city>local_faction or national_party>local_branch"""
+    """
+    Hierarchical faction/party (סיעות)
+
+    Structure:
+    - National factions (סיעות ארציות): municipality_id=NULL, shared across all cities
+    - Local factions (סיעות מקומיות): municipality_id set, specific to one city
+
+    Hierarchy example:
+    - ליכוד (ארצית, parent=NULL)
+      └── ליכוד יהוד (מקומית, parent=ליכוד, municipality=יהוד)
+    - רשימה מקומית (מקומית, parent="סיעות מקומיות", municipality=יהוד)
+    """
     __tablename__ = 'factions'
 
     id = Column(Integer, primary_key=True)
     name = Column(String(300), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey('factions.id'), nullable=True)
 
+    # Faction type: 'national' (ארצית) or 'local' (מקומית)
+    faction_type = Column(String(20), default='national')
+
+    # For local factions - which municipality they belong to (NULL = national/shared)
+    municipality_id = Column(Integer, ForeignKey('municipalities.id'), nullable=True)
+
     # Self-referential relationship for hierarchy
     parent = relationship('Faction', remote_side=[id], backref='children')
+
+    # Relationship with municipality (for local factions)
+    municipality = relationship('Municipality', backref='local_factions')
 
     # Relationship with persons
     persons = relationship('Person', back_populates='faction_obj')
 
     def __repr__(self):
-        return f"<Faction(name='{self.name}', parent_id={self.parent_id})>"
+        type_str = 'ארצית' if self.faction_type == 'national' else 'מקומית'
+        return f"<Faction(name='{self.name}', type={type_str})>"
 
 
 class Role(Base):
@@ -157,8 +213,10 @@ class Person(Base):
     # Foreign keys
     faction_id = Column(Integer, ForeignKey('factions.id'), nullable=True)
     role_id = Column(Integer, ForeignKey('roles.id'), nullable=True)
+    municipality_id = Column(Integer, ForeignKey('municipalities.id'), nullable=True)
 
     # Relationships
+    municipality = relationship('Municipality', back_populates='persons')
     faction_obj = relationship('Faction', back_populates='persons')
     role_obj = relationship('Role', back_populates='persons')
     terms = relationship('Term', secondary=person_term, backref='active_persons')
@@ -183,7 +241,11 @@ class Board(Base):
     description = Column(Text)
     authority_post_id = Column(String(50))
 
+    # Foreign key to municipality
+    municipality_id = Column(Integer, ForeignKey('municipalities.id'), nullable=True)
+
     # Relationships
+    municipality = relationship('Municipality', back_populates='boards')
     members = relationship('Person', secondary=person_board, back_populates='boards')
     meetings = relationship('Meeting', back_populates='board')
 
@@ -207,10 +269,12 @@ class Meeting(Base):
     # Meeting type: 'regular' (מן המניין), 'special' (שלא מן המניין), 'general_assembly' (אסיפה כללית)
     meeting_type = Column(String(50), nullable=True, default='regular')
 
-    # Foreign key to term
+    # Foreign keys
     term_id = Column(Integer, ForeignKey('terms.id'))
+    municipality_id = Column(Integer, ForeignKey('municipalities.id'), nullable=True)
 
     # Relationships
+    municipality = relationship('Municipality', back_populates='meetings')
     term = relationship('Term', back_populates='meetings')
     board = relationship('Board', back_populates='meetings')
     discussions = relationship('Discussion', back_populates='meeting')

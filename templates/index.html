@@ -7,6 +7,34 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">
+        <!-- Municipality Selection -->
+        <div class="card mb-3">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-building"></i>
+                    רשות מקומית
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <select class="form-select form-select-lg" id="municipalitySelect">
+                            {% for muni in municipalities %}
+                            <option value="{{ muni.id }}" {% if muni.id == current_municipality_id %}selected{% endif %}>
+                                {{ muni.name }} ({{ muni.type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <span class="badge bg-secondary fs-6" id="meetingCountBadge">
+                            {{ meetings|length }} ישיבות
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h4 class="mb-0">
@@ -92,7 +120,7 @@
             <div class="card-body">
                 <div id="comparisonContent"></div>
                 <div class="mt-4 text-center">
-                    <a href="/step/1" class="btn btn-success btn-lg">
+                    <a href="/step/1?sid={{ sid }}" class="btn btn-success btn-lg" id="startValidationBtn">
                         <i class="bi bi-arrow-left"></i>
                         התחל ולידציה
                     </a>
@@ -105,6 +133,65 @@
 
 {% block extra_js %}
 <script>
+// Session ID for multi-tab support - each tab gets its own sid
+const SID = '{{ sid }}';
+
+// Helper to add sid to URL
+function addSidToUrl(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'sid=' + SID;
+}
+
+// Municipality selection handler
+document.getElementById('municipalitySelect').addEventListener('change', async function() {
+    showLoading('טוען ישיבות...');
+    const municipalityId = this.value;
+
+    try {
+        const response = await fetch('/set_municipality', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({municipality_id: parseInt(municipalityId)})
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Update meetings table
+            const tbody = document.querySelector('#meetingsTable tbody');
+            tbody.innerHTML = '';
+
+            data.meetings.forEach(meeting => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-search', `${meeting.meeting_no} ${meeting.date} ${meeting.type}`);
+                row.innerHTML = `
+                    <td>${meeting.meeting_no}</td>
+                    <td>${meeting.date}</td>
+                    <td>${meeting.type}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary select-meeting" data-id="${meeting.id}">
+                            <i class="bi bi-check-lg"></i> בחר
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Re-attach event listeners
+            attachMeetingSelectHandlers();
+
+            // Update badge
+            document.getElementById('meetingCountBadge').textContent = data.meetings.length + ' ישיבות';
+
+            showToast('רשות נבחרה: ' + data.municipality_name, 'success');
+        } else {
+            showToast(data.error, 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בבחירת רשות', 'danger');
+    }
+    hideLoading();
+});
+
 document.getElementById('uploadForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     showLoading('מעבד את קובץ ה-PDF...', true);
@@ -129,6 +216,7 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
 
     const formData = new FormData();
     formData.append('pdf_file', document.getElementById('pdfFile').files[0]);
+    formData.append('sid', SID);
 
     try {
         const response = await fetch('/upload', {
@@ -180,70 +268,77 @@ document.getElementById('meetingSearch').addEventListener('input', function() {
     });
 });
 
-// Meeting selection
-document.querySelectorAll('.select-meeting').forEach(btn => {
-    btn.addEventListener('click', async function() {
-        showLoading();
-        const meetingId = this.getAttribute('data-id');
-
-        try {
-            const response = await fetch('/match_meeting', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({meeting_id: meetingId})
-            });
-            const data = await response.json();
-
-            console.log('match_meeting response:', data);
-            if (data.success) {
-                // Show comparison preview
-                const meeting = data.meeting;
-                const comparison = data.comparison;
-
-                let html = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6><i class="bi bi-database"></i> נתוני בסיס נתונים</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>מספר ישיבה:</strong> ${meeting.meeting_no}</li>
-                                <li><strong>תאריך:</strong> ${meeting.date}</li>
-                                <li><strong>נוכחים:</strong> ${meeting.present.length}</li>
-                                <li><strong>נעדרים:</strong> ${meeting.absent.length}</li>
-                                <li><strong>סגל:</strong> ${meeting.staff.length}</li>
-                                <li><strong>דיונים:</strong> ${meeting.discussions.length}</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h6><i class="bi bi-file-pdf"></i> נתוני OCR</h6>
-                            <p class="text-muted">הנתונים יושוו בשלבים הבאים</p>
-                        </div>
-                    </div>
-                `;
-
-                if (comparison.matches && comparison.matches.length > 0) {
-                    html += '<div class="alert alert-success mt-3"><strong>התאמות:</strong><br>' + comparison.matches.join('<br>') + '</div>';
-                }
-                if (comparison.discrepancies && comparison.discrepancies.length > 0) {
-                    html += '<div class="alert alert-warning mt-3">';
-                    html += '<strong><i class="bi bi-exclamation-triangle"></i> פערים (אזהרה בלבד - לא מונע המשך):</strong><br>';
-                    html += comparison.discrepancies.join('<br>');
-                    html += '<hr><small class="text-muted">פערים אלו ייבדקו בשלבי הולידציה הבאים. ניתן להמשיך.</small>';
-                    html += '</div>';
-                }
-
-                document.getElementById('comparisonContent').innerHTML = html;
-                document.getElementById('comparisonPreview').style.display = 'block';
-
-                // Scroll to preview
-                document.getElementById('comparisonPreview').scrollIntoView({behavior: 'smooth'});
-            } else {
-                showToast(data.error, 'danger');
-            }
-        } catch (error) {
-            showToast('שגיאה בבחירת הישיבה', 'danger');
-        }
-        hideLoading();
+// Meeting selection function
+function attachMeetingSelectHandlers() {
+    document.querySelectorAll('.select-meeting').forEach(btn => {
+        btn.addEventListener('click', handleMeetingSelect);
     });
-});
+}
+
+async function handleMeetingSelect() {
+    showLoading();
+    const meetingId = this.getAttribute('data-id');
+
+    try {
+        const response = await fetch('/match_meeting', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({meeting_id: meetingId, sid: SID})
+        });
+        const data = await response.json();
+
+        console.log('match_meeting response:', data);
+        if (data.success) {
+            // Show comparison preview
+            const meeting = data.meeting;
+            const comparison = data.comparison;
+
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-database"></i> נתוני בסיס נתונים</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>מספר ישיבה:</strong> ${meeting.meeting_no}</li>
+                            <li><strong>תאריך:</strong> ${meeting.date}</li>
+                            <li><strong>נוכחים:</strong> ${meeting.present.length}</li>
+                            <li><strong>נעדרים:</strong> ${meeting.absent.length}</li>
+                            <li><strong>סגל:</strong> ${meeting.staff.length}</li>
+                            <li><strong>דיונים:</strong> ${meeting.discussions.length}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-file-pdf"></i> נתוני OCR</h6>
+                        <p class="text-muted">הנתונים יושוו בשלבים הבאים</p>
+                    </div>
+                </div>
+            `;
+
+            if (comparison.matches && comparison.matches.length > 0) {
+                html += '<div class="alert alert-success mt-3"><strong>התאמות:</strong><br>' + comparison.matches.join('<br>') + '</div>';
+            }
+            if (comparison.discrepancies && comparison.discrepancies.length > 0) {
+                html += '<div class="alert alert-warning mt-3">';
+                html += '<strong><i class="bi bi-exclamation-triangle"></i> פערים (אזהרה בלבד - לא מונע המשך):</strong><br>';
+                html += comparison.discrepancies.join('<br>');
+                html += '<hr><small class="text-muted">פערים אלו ייבדקו בשלבי הולידציה הבאים. ניתן להמשיך.</small>';
+                html += '</div>';
+            }
+
+            document.getElementById('comparisonContent').innerHTML = html;
+            document.getElementById('comparisonPreview').style.display = 'block';
+
+            // Scroll to preview
+            document.getElementById('comparisonPreview').scrollIntoView({behavior: 'smooth'});
+        } else {
+            showToast(data.error, 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בבחירת הישיבה', 'danger');
+    }
+    hideLoading();
+}
+
+// Attach handlers on page load
+attachMeetingSelectHandlers();
 </script>
 {% endblock %}

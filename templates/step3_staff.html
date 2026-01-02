@@ -127,9 +127,10 @@
                     <i class="bi bi-info-circle"></i>
                     <strong>הוראות:</strong>
                     <ul class="mb-0 mt-2">
-                        <li><strong>טקסט הפוך</strong> - לחץ "הפוך טקסט" לתיקון אוטומטי, או "ערוך" לתיקון ידני</li>
-                        <li><strong>סגל חדש</strong> - לחץ "שמור לבסיס נתונים" להוספת האדם והתפקיד</li>
-                        <li><strong>שגיאה</strong> - לחץ "ערוך" לתיקון ידני או "מחק" להתעלמות</li>
+                        <li><i class="bi bi-arrow-left-right text-warning"></i> <strong>הפוך הכל</strong> - הופך שם ותפקיד ביחד</li>
+                        <li><i class="bi bi-pencil text-primary"></i> <strong>ערוך</strong> - פותח טופס עריכה עם כפתורי היפוך נפרדים לשם ולתפקיד</li>
+                        <li><i class="bi bi-database-add text-success"></i> <strong>שמור ל-DB</strong> - שומר לרשימת השינויים הממתינים</li>
+                        <li><i class="bi bi-trash text-danger"></i> <strong>מחק</strong> - מסיר מהרשימה</li>
                     </ul>
                 </div>
 
@@ -160,12 +161,10 @@
                                 {% endif %}
                             </div>
                             <div class="action-bar">
-                                {% if is_reversed %}
-                                <button class="btn btn-sm btn-warning reverse-btn" title="הפוך טקסט">
-                                    <i class="bi bi-arrow-left-right"></i> הפוך
+                                <button class="btn btn-sm btn-warning reverse-all-btn" title="הפוך שם ותפקיד">
+                                    <i class="bi bi-arrow-left-right"></i> הפוך הכל
                                 </button>
-                                {% endif %}
-                                <button class="btn btn-sm btn-outline-primary edit-btn" title="ערוך">
+                                <button class="btn btn-sm btn-outline-primary edit-btn" title="ערוך (עם אפשרות היפוך נפרד)">
                                     <i class="bi bi-pencil"></i> ערוך
                                 </button>
                                 <button class="btn btn-sm btn-outline-success save-to-db-btn" title="שמור לבסיס נתונים">
@@ -205,12 +204,22 @@
                             <div class="row g-3">
                                 <div class="col-md-5">
                                     <label class="form-label">שם (מתוקן)</label>
-                                    <input type="text" class="form-control edit-name" value="{{ staff.name }}">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control edit-name" value="{{ staff.name }}">
+                                        <button class="btn btn-outline-warning reverse-name-btn" type="button" title="הפוך שם">
+                                            <i class="bi bi-arrow-left-right"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="col-md-5">
                                     <label class="form-label">תפקיד (מתוקן)</label>
-                                    <input type="text" class="form-control edit-role" value="{{ staff.role or '' }}"
-                                           list="rolesList">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control edit-role" value="{{ staff.role or '' }}"
+                                               list="rolesList">
+                                        <button class="btn btn-outline-warning reverse-role-btn" type="button" title="הפוך תפקיד">
+                                            <i class="bi bi-arrow-left-right"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="col-md-2 d-flex align-items-end">
                                     <button class="btn btn-success w-100 apply-edit-btn">
@@ -307,7 +316,7 @@
                 </div>
 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/step/2" class="btn btn-outline-secondary">
+                    <a href="/step/2?sid={{ sid }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-right"></i>
                         חזור לנוכחות
                     </a>
@@ -315,7 +324,7 @@
                         <button class="btn btn-success me-2" id="saveAllStaffBtn">
                             <i class="bi bi-check-all"></i> שמור הכל ל-DB
                         </button>
-                        <a href="/step/4" class="btn btn-primary btn-lg">
+                        <a href="/step/4a?sid={{ sid }}" class="btn btn-primary btn-lg">
                             המשך לסעיפים
                             <i class="bi bi-arrow-left"></i>
                         </a>
@@ -349,8 +358,8 @@ function updateCounts() {
 document.addEventListener('DOMContentLoaded', function() {
     updateCounts();
 
-    // Reverse button
-    document.querySelectorAll('.reverse-btn').forEach(btn => {
+    // Reverse ALL button (name + role together)
+    document.querySelectorAll('.reverse-all-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const card = this.closest('.staff-card');
             const nameEl = card.querySelector('.display-name');
@@ -382,11 +391,26 @@ document.addEventListener('DOMContentLoaded', function() {
             card.classList.remove('reversed');
             card.classList.add('valid');
 
-            // Hide reverse button
-            this.style.display = 'none';
-
             showToast('הטקסט הופך בהצלחה');
             updateCounts();
+        });
+    });
+
+    // Reverse NAME only button (in edit form)
+    document.querySelectorAll('.reverse-name-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.closest('.input-group').querySelector('.edit-name');
+            input.value = reverseText(input.value);
+            showToast('השם הופך');
+        });
+    });
+
+    // Reverse ROLE only button (in edit form)
+    document.querySelectorAll('.reverse-role-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.closest('.input-group').querySelector('.edit-role');
+            input.value = reverseText(input.value);
+            showToast('התפקיד הופך');
         });
     });
 
@@ -453,12 +477,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const card = this.closest('.staff-card');
             const name = card.dataset.name;
             const role = card.dataset.role;
+            const sid = getSid();
 
             try {
                 const response = await fetch('/api/save_staff', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name, role })
+                    body: JSON.stringify({ name, role, sid })
                 });
                 const result = await response.json();
                 if (result.success) {
@@ -467,6 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.innerHTML = '<i class="bi bi-check"></i> נשמר';
                     this.disabled = true;
                     showToast('נשמר לבסיס הנתונים');
+                    updatePendingIndicator();
                 } else {
                     showToast(result.error || 'שגיאה בשמירה', 'danger');
                 }
@@ -514,6 +540,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="badge bg-info">חדש</span>
                 </div>
                 <div class="action-bar">
+                    <button class="btn btn-sm btn-warning reverse-all-btn" title="הפוך שם ותפקיד">
+                        <i class="bi bi-arrow-left-right"></i> הפוך הכל
+                    </button>
                     <button class="btn btn-sm btn-outline-primary edit-btn" title="ערוך">
                         <i class="bi bi-pencil"></i> ערוך
                     </button>
@@ -539,11 +568,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="row g-3">
                     <div class="col-md-5">
                         <label class="form-label">שם (מתוקן)</label>
-                        <input type="text" class="form-control edit-name" value="${name}">
+                        <div class="input-group">
+                            <input type="text" class="form-control edit-name" value="${name}">
+                            <button class="btn btn-outline-warning reverse-name-btn" type="button" title="הפוך שם">
+                                <i class="bi bi-arrow-left-right"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">תפקיד (מתוקן)</label>
-                        <input type="text" class="form-control edit-role" value="${role}" list="rolesList">
+                        <div class="input-group">
+                            <input type="text" class="form-control edit-role" value="${role}" list="rolesList">
+                            <button class="btn btn-outline-warning reverse-role-btn" type="button" title="הפוך תפקיד">
+                                <i class="bi bi-arrow-left-right"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button class="btn btn-success w-100 apply-edit-btn">
@@ -571,6 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save all to DB
     document.getElementById('saveAllStaffBtn')?.addEventListener('click', async function() {
         const cards = document.querySelectorAll('.staff-card');
+        const sid = getSid();
         let saved = 0;
 
         for (const card of cards) {
@@ -582,7 +622,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const response = await fetch('/api/save_staff', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ name, role })
+                        body: JSON.stringify({ name, role, sid })
                     });
                     const result = await response.json();
                     if (result.success) {
@@ -597,10 +637,51 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         showToast(`נשמרו ${saved} רשומות`);
+        updatePendingIndicator();
     });
 });
 
 function attachCardListeners(card) {
+    // Reverse ALL button
+    card.querySelector('.reverse-all-btn')?.addEventListener('click', function() {
+        const nameEl = card.querySelector('.display-name');
+        const roleEl = card.querySelector('.display-role');
+        const nameInput = card.querySelector('.edit-name');
+        const roleInput = card.querySelector('.edit-role');
+
+        const currentName = card.dataset.name;
+        const currentRole = card.dataset.role;
+
+        const reversedName = reverseText(currentName);
+        const reversedRole = currentRole ? reverseText(currentRole) : '';
+
+        nameEl.innerHTML = reversedName;
+        roleEl.innerHTML = reversedRole || 'לא זוהה';
+        nameInput.value = reversedName;
+        roleInput.value = reversedRole;
+        card.dataset.name = reversedName;
+        card.dataset.role = reversedRole;
+
+        card.classList.remove('reversed');
+        card.classList.add('valid');
+        showToast('הטקסט הופך בהצלחה');
+        updateCounts();
+    });
+
+    // Reverse NAME only button
+    card.querySelector('.reverse-name-btn')?.addEventListener('click', function() {
+        const input = this.closest('.input-group').querySelector('.edit-name');
+        input.value = reverseText(input.value);
+        showToast('השם הופך');
+    });
+
+    // Reverse ROLE only button
+    card.querySelector('.reverse-role-btn')?.addEventListener('click', function() {
+        const input = this.closest('.input-group').querySelector('.edit-role');
+        input.value = reverseText(input.value);
+        showToast('התפקיד הופך');
+    });
+
     // Edit button
     card.querySelector('.edit-btn')?.addEventListener('click', function() {
         const form = card.querySelector('.edit-form');
@@ -622,6 +703,7 @@ function attachCardListeners(card) {
         card.classList.remove('reversed', 'error', 'new');
         card.classList.add('valid');
         card.querySelector('.edit-form').classList.remove('show');
+        card.querySelector('.edit-btn').innerHTML = '<i class="bi bi-pencil"></i> ערוך';
 
         showToast('השינויים נשמרו');
         updateCounts();
@@ -640,12 +722,13 @@ function attachCardListeners(card) {
     card.querySelector('.save-to-db-btn')?.addEventListener('click', async function() {
         const name = card.dataset.name;
         const role = card.dataset.role;
+        const sid = getSid();
 
         try {
             const response = await fetch('/api/save_staff', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, role })
+                body: JSON.stringify({ name, role, sid })
             });
             const result = await response.json();
             if (result.success) {
@@ -653,6 +736,7 @@ function attachCardListeners(card) {
                 this.innerHTML = '<i class="bi bi-check"></i> נשמר';
                 this.disabled = true;
                 showToast('נשמר לבסיס הנתונים');
+                updatePendingIndicator();
             }
         } catch (error) {
             showToast('שגיאה בשמירה', 'danger');

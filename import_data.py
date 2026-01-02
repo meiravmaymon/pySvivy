@@ -5,7 +5,7 @@ import sys
 import pandas as pd
 from datetime import datetime
 from database import init_db, get_session
-from models import Person, Board, Meeting, Discussion, Vote, Attendance, Term, Category, DiscussionType, Faction, Role, BudgetSource
+from models import Person, Board, Meeting, Discussion, Vote, Attendance, Term, Category, DiscussionType, Faction, Role, BudgetSource, Municipality
 import re
 from html import unescape
 from php_unserialize import php_unserialize_simple, parse_attendees_list, extract_vote_from_attendee
@@ -199,7 +199,7 @@ def parse_budget_sources(budget_data_str):
     return sources, total
 
 
-def get_or_create_hierarchical_items(session, model, value_str, cache):
+def get_or_create_hierarchical_items(session, model, value_str, cache, **extra_attrs):
     """
     Parse hierarchical string and create parent-child items
     Returns list of created/existing items (from parent to deepest child)
@@ -209,6 +209,7 @@ def get_or_create_hierarchical_items(session, model, value_str, cache):
         model: Category or DiscussionType class
         value_str: String like "parent>child>grandchild"
         cache: Dictionary cache for quick lookups {name: item}
+        **extra_attrs: Additional attributes to set on new items (e.g., municipality_id, faction_type)
     """
     parts = parse_hierarchical_field(value_str)
     if not parts:
@@ -228,8 +229,8 @@ def get_or_create_hierarchical_items(session, model, value_str, cache):
             item = query.first()
 
             if not item:
-                # Create new item
-                item = model(name=part, parent_id=parent_id)
+                # Create new item with extra attributes
+                item = model(name=part, parent_id=parent_id, **extra_attrs)
                 session.add(item)
                 session.flush()  # Get the ID
 
@@ -241,7 +242,7 @@ def get_or_create_hierarchical_items(session, model, value_str, cache):
     return items
 
 
-def create_terms(session):
+def create_terms(session, municipality_id=None):
     """Create term records based on election periods"""
     print("\n=== Creating Terms (Kadenziyot) ===")
 
@@ -258,7 +259,8 @@ def create_terms(session):
             term_number=term_data['term_number'],
             start_date=term_data['start_date'],
             end_date=term_data['end_date'],
-            is_current=term_data['is_current']
+            is_current=term_data['is_current'],
+            municipality_id=municipality_id
         )
         session.add(term)
         term_map[term_data['term_number']] = term
@@ -268,7 +270,7 @@ def create_terms(session):
     return term_map
 
 
-def import_boards(session):
+def import_boards(session, municipality_id=None):
     """Import boards/committees from Excel"""
     print("\n=== Importing Boards/Committees ===")
     df = pd.read_excel(FILES['boards'])
@@ -291,7 +293,8 @@ def import_boards(session):
             start_date=parse_date(row.get('start_date')),
             end_date=parse_date(row.get('end_date')),
             description=row.get('board_desc', ''),
-            authority_post_id=str(row.get('authority_post_id', ''))
+            authority_post_id=str(row.get('authority_post_id', '')),
+            municipality_id=municipality_id
         )
         session.add(board)
         board_map[original_id] = board
@@ -301,7 +304,7 @@ def import_boards(session):
     return board_map
 
 
-def import_persons(session, board_map, term_map):
+def import_persons(session, board_map, term_map, municipality_id=None):
     """Import persons/council members from Excel"""
     print("\n=== Importing Council Members ===")
     df = pd.read_excel(FILES['persons'])
@@ -315,9 +318,12 @@ def import_persons(session, board_map, term_map):
         start_date = parse_date(row.get('start_date'))
         end_date = parse_date(row.get('end_date'))
 
-        # Parse faction (city>faction_name)
+        # Parse faction (city>faction_name) - factions are local to municipality
         faction_str = row.get('סיעות', '')
-        faction_items = get_or_create_hierarchical_items(session, Faction, faction_str, faction_cache)
+        faction_items = get_or_create_hierarchical_items(
+            session, Faction, faction_str, faction_cache,
+            faction_type='local', municipality_id=municipality_id
+        )
         faction_obj = faction_items[-1] if faction_items else None  # Get the deepest (most specific) faction
 
         # Parse role (organization>position)
@@ -335,7 +341,8 @@ def import_persons(session, board_map, term_map):
             gender=int(row.get('gender', 0)) if pd.notna(row.get('gender')) else None,
             miss_counter=int(row.get('miss_counter', 0)) if pd.notna(row.get('miss_counter')) else 0,
             faction_id=faction_obj.id if faction_obj else None,
-            role_id=role_obj.id if role_obj else None
+            role_id=role_obj.id if role_obj else None,
+            municipality_id=municipality_id  # municipality_id passed to function
         )
         session.add(person)
         session.flush()  # Get person.id
@@ -371,7 +378,7 @@ def import_persons(session, board_map, term_map):
     return person_map, person_name_map
 
 
-def import_meetings(session, board_map, term_map):
+def import_meetings(session, board_map, term_map, municipality_id=None):
     """Import meetings/protocols from Excel"""
     print("\n=== Importing Meetings/Protocols ===")
     df = pd.read_excel(FILES['meetings'])
@@ -396,7 +403,8 @@ def import_meetings(session, board_map, term_map):
             description=row.get('meeting_desc', ''),
             protocol_file=row.get('protocol_file', ''),
             board_id=board.id if board else None,
-            term_id=term.id if term else None
+            term_id=term.id if term else None,
+            municipality_id=municipality_id
         )
         session.add(meeting)
         meeting_map[meeting.original_id] = meeting
@@ -566,13 +574,27 @@ def main():
     session = get_session()
 
     try:
+        # Get or create Yehud-Monosson municipality
+        municipality = session.query(Municipality).filter_by(semel='6600').first()
+        if not municipality:
+            municipality = Municipality(
+                semel='6600',
+                name_he='יהוד-מונוסון',
+                name_en='Yehud-Monosson',
+                municipality_type='עירייה'
+            )
+            session.add(municipality)
+            session.commit()
+            print(f"✓ Created municipality: {municipality.name_he}")
+        municipality_id = municipality.id
+
         # Create terms first (based on election dates)
-        term_map = create_terms(session)
+        term_map = create_terms(session, municipality_id)
 
         # Import in order of dependencies
-        board_map = import_boards(session)
-        person_map, person_name_map = import_persons(session, board_map, term_map)
-        meeting_map = import_meetings(session, board_map, term_map)
+        board_map = import_boards(session, municipality_id)
+        person_map, person_name_map = import_persons(session, board_map, term_map, municipality_id)
+        meeting_map = import_meetings(session, board_map, term_map, municipality_id)
         import_discussions_and_votes(session, meeting_map, person_name_map)
         import_attendances(session, meeting_map, person_name_map)
 

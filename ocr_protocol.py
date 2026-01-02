@@ -13,7 +13,7 @@ from models import Meeting, Discussion, Vote, Attendance, Person
 import json
 
 # Debug flag - set to True to enable debug output
-DEBUG = False
+DEBUG = True
 
 def debug_print(*args, **kwargs):
     """Print only if DEBUG is True"""
@@ -33,6 +33,29 @@ except ImportError:
     print("WARNING: llm_helper not available, LLM fallback disabled")
     OLLAMA_AVAILABLE = False
     generate_discussion_summary = None
+
+# Import OCR Learning Agent for auto-corrections
+try:
+    from ocr_learning_agent import OCRLearningAgent
+    _learning_agent = OCRLearningAgent()
+    LEARNING_AVAILABLE = True
+except ImportError:
+    print("WARNING: OCRLearningAgent not available, learning disabled")
+    _learning_agent = None
+    LEARNING_AVAILABLE = False
+
+def apply_learned_corrections(text: str, field_type: str = 'word') -> str:
+    """Apply learned corrections from OCR Learning Agent"""
+    if not LEARNING_AVAILABLE or not _learning_agent:
+        return text
+    try:
+        corrected, corrections_made = _learning_agent.auto_correct(text, field_type)
+        if corrections_made:
+            debug_print(f"Applied {len(corrections_made)} learned corrections to {field_type}")
+        return corrected
+    except Exception as e:
+        debug_print(f"Learning agent error: {e}")
+        return text
 
 # Configure Tesseract paths
 TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -57,6 +80,47 @@ def get_council_members():
             print(f"Warning: Could not load council members from DB: {e}")
             _council_members_cache = []
     return _council_members_cache
+
+def extract_municipality_name(text):
+    """
+    Extract municipality name from protocol text.
+
+    חילוץ שם הרשות המקומית מטקסט הפרוטוקול.
+
+    Looks for patterns like:
+    - מועצת העיר יהוד-מונוסון
+    - עיריית תל אביב
+    - מועצה מקומית כפר יונה
+    - מועצה אזורית עמק יזרעאל
+
+    Returns:
+        str or None: Municipality name if found, None otherwise
+    """
+    if not text:
+        return None
+
+    patterns = [
+        # מועצת העיר + שם
+        r'מועצת\s+העיר\s+([א-ת\-\s]{2,30})(?:\s+מן\s+המניין|\s+שלא|\s+מס[\'׳]|\s*$)',
+        # עיריית + שם
+        r'עיריית\s+([א-ת\-\s]{2,30})(?:\s+פרוטוקול|\s+מועצת|\s*$)',
+        # מועצה מקומית + שם
+        r'מועצה\s+מקומית\s+([א-ת\-\s]{2,30})(?:\s+פרוטוקול|\s+מועצת|\s*$)',
+        # מועצה אזורית + שם
+        r'מועצה\s+אזורית\s+([א-ת\-\s]{2,30})(?:\s+פרוטוקול|\s+מועצת|\s*$)',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, re.MULTILINE)
+        if match:
+            name = match.group(1).strip()
+            # Clean up trailing punctuation
+            name = re.sub(r'[\s,.:]+$', '', name)
+            if len(name) >= 2:
+                return name
+
+    return None
+
 
 def match_partial_name(partial_name):
     """
@@ -90,6 +154,113 @@ def match_partial_name(partial_name):
 
     # If multiple matches, return partial (ambiguous)
     return partial_name
+
+
+def smart_match_name(name):
+    """
+    התאמה חכמה של שם לבסיס הנתונים.
+
+    הגישה:
+    1. נסה למצוא את השם כפי שהוא בבסיס הנתונים
+    2. אם לא נמצא - הפוך את השם ונסה שוב
+    3. אם נמצא בצורה ההפוכה - החזר את הצורה מבסיס הנתונים
+    4. אם לא נמצא בכלל - החזר את השם המקורי
+
+    Args:
+        name: השם שחולץ מה-OCR
+
+    Returns:
+        tuple: (matched_name, was_reversed, match_type)
+        - matched_name: השם שנמצא או המקורי
+        - was_reversed: האם היה צורך להפוך
+        - match_type: 'exact', 'partial', 'reversed_exact', 'reversed_partial', 'none'
+    """
+    if not name or len(name) < 2:
+        return name, False, 'none'
+
+    council_members = get_council_members()
+    if not council_members:
+        return name, False, 'none'
+
+    name_normalized = name.strip()
+    # נרמול: הסרת מקפים לצורך השוואה
+    name_no_dash = name_normalized.replace('-', ' ').replace('־', ' ')
+
+    # === שלב 1: חיפוש ישיר ===
+    # התאמה מלאה
+    for full_name in council_members:
+        if name_normalized == full_name:
+            debug_print(f"smart_match_name: '{name}' -> exact match '{full_name}'")
+            return full_name, False, 'exact'
+        # התאמה ללא מקפים
+        full_name_no_dash = full_name.replace('-', ' ').replace('־', ' ')
+        if name_no_dash == full_name_no_dash:
+            debug_print(f"smart_match_name: '{name}' -> exact match (no dash) '{full_name}'")
+            return full_name, False, 'exact'
+
+    # התאמה חלקית (שם פרטי)
+    for full_name in council_members:
+        name_parts = full_name.split()
+        if name_parts and name_parts[0] == name_normalized:
+            debug_print(f"smart_match_name: '{name}' -> partial match '{full_name}'")
+            return full_name, False, 'partial'
+
+    # === שלב 2: הפיכה וחיפוש ===
+    # הפוך את השם (תו-תו)
+    reversed_name = normalize_final_letters(name_normalized[::-1])
+    reversed_name_no_dash = reversed_name.replace('-', ' ').replace('־', ' ')
+
+    # התאמה מלאה של הגרסה ההפוכה
+    for full_name in council_members:
+        if reversed_name == full_name:
+            debug_print(f"smart_match_name: '{name}' -> reversed exact match '{full_name}'")
+            return full_name, True, 'reversed_exact'
+        # התאמה ללא מקפים
+        full_name_no_dash = full_name.replace('-', ' ').replace('־', ' ')
+        if reversed_name_no_dash == full_name_no_dash:
+            debug_print(f"smart_match_name: '{name}' -> reversed exact match (no dash) '{full_name}'")
+            return full_name, True, 'reversed_exact'
+
+    # התאמה חלקית של הגרסה ההפוכה (שם פרטי)
+    for full_name in council_members:
+        name_parts = full_name.split()
+        if name_parts and name_parts[0] == reversed_name:
+            debug_print(f"smart_match_name: '{name}' -> reversed partial match '{full_name}'")
+            return full_name, True, 'reversed_partial'
+
+    # === שלב 3: חיפוש פזי (fuzzy) ===
+    # בדיקה אם השם הוא חלק משם בבסיס (או להיפך)
+    for full_name in council_members:
+        full_name_no_dash = full_name.replace('-', ' ').replace('־', ' ')
+        if name_no_dash in full_name_no_dash or full_name_no_dash in name_no_dash:
+            debug_print(f"smart_match_name: '{name}' -> fuzzy match '{full_name}'")
+            return full_name, False, 'fuzzy'
+        if reversed_name_no_dash in full_name_no_dash or full_name_no_dash in reversed_name_no_dash:
+            debug_print(f"smart_match_name: '{name}' -> reversed fuzzy match '{full_name}'")
+            return full_name, True, 'reversed_fuzzy'
+
+    # === שלב 4: OCR error tolerance ===
+    # אותיות שנראות דומות ב-OCR: ת/ח, ר/ד, ו/ן, כ/ב, ע/צ
+    def normalize_ocr_errors(s):
+        """נרמול שגיאות OCR נפוצות"""
+        return s.replace('ת', 'ח').replace('ד', 'ר').replace('כ', 'ב')
+
+    name_ocr_norm = normalize_ocr_errors(name_no_dash)
+    reversed_ocr_norm = normalize_ocr_errors(reversed_name_no_dash)
+
+    for full_name in council_members:
+        full_name_no_dash = full_name.replace('-', ' ').replace('־', ' ')
+        full_name_ocr_norm = normalize_ocr_errors(full_name_no_dash)
+        if name_ocr_norm == full_name_ocr_norm:
+            debug_print(f"smart_match_name: '{name}' -> OCR-tolerant match '{full_name}'")
+            return full_name, False, 'ocr_tolerant'
+        if reversed_ocr_norm == full_name_ocr_norm:
+            debug_print(f"smart_match_name: '{name}' -> reversed OCR-tolerant match '{full_name}'")
+            return full_name, True, 'reversed_ocr_tolerant'
+
+    # לא נמצאה התאמה
+    debug_print(f"smart_match_name: '{name}' -> no match (reversed would be '{reversed_name}')")
+    return name, False, 'none'
 
 
 def extract_staff_with_roles(text):
@@ -566,6 +737,100 @@ def fix_reversed_numbers(text):
     return result
 
 
+def detect_document_direction(text, sample_size=500):
+    """
+    זיהוי כיוון הטקסט ברמת המסמך כולו.
+
+    בודק דגימות מכמה מקומות במסמך כדי לקבוע האם הטקסט:
+    - תקין (RTL נכון)
+    - הפוך (RTL שנקרא כ-LTR)
+
+    Args:
+        text: הטקסט המלא של המסמך
+        sample_size: גודל כל דגימה בתווים
+
+    Returns:
+        dict עם:
+        - 'direction': 'normal' או 'reversed'
+        - 'confidence': רמת ביטחון (0-1)
+        - 'indicators': רשימת אינדיקטורים שנמצאו
+    """
+    if not text or len(text) < 100:
+        return {'direction': 'normal', 'confidence': 0.5, 'indicators': []}
+
+    indicators = []
+    normal_score = 0
+    reversed_score = 0
+
+    # דגימות מתחילת, אמצע וסוף המסמך
+    text_len = len(text)
+    samples = [
+        text[:sample_size],
+        text[text_len//2 - sample_size//2 : text_len//2 + sample_size//2],
+        text[-sample_size:]
+    ]
+
+    combined_sample = '\n'.join(samples)
+
+    # אינדיקטור 1: מילים מוכרות בעברית
+    # מילים תקינות
+    normal_words = ['מועצת', 'העיר', 'ישיבה', 'פרוטוקול', 'סעיף', 'החלטה', 'אושר', 'בעד', 'נגד']
+    # אותן מילים הפוכות
+    reversed_words = ['תצעומ', 'ריעה', 'הבישי', 'לוקוטורפ', 'ףיעס', 'הטלחה', 'רשוא', 'דעב', 'דגנ']
+
+    for word in normal_words:
+        if word in combined_sample:
+            normal_score += 1
+            indicators.append(f'מילה תקינה: {word}')
+
+    for word in reversed_words:
+        if word in combined_sample:
+            reversed_score += 1
+            indicators.append(f'מילה הפוכה: {word}')
+
+    # אינדיקטור 2: נקודתיים בסוף שורה (תקין) vs בתחילת שורה (הפוך)
+    lines = [l.strip() for l in combined_sample.split('\n') if l.strip()]
+    ends_colon = sum(1 for l in lines if l.endswith(':'))
+    starts_colon = sum(1 for l in lines if l.startswith(':'))
+
+    if ends_colon > starts_colon + 2:
+        normal_score += 2
+        indicators.append(f'נקודתיים בסוף שורות: {ends_colon}')
+    elif starts_colon > ends_colon + 2:
+        reversed_score += 2
+        indicators.append(f'נקודתיים בתחילת שורות: {starts_colon}')
+
+    # אינדיקטור 3: תבניות ידועות
+    # פרוטוקול תקין מתחיל עם "עיריית" או "מועצת"
+    if re.search(r'^(?:עיריית|מועצת|פרוטוקול)', combined_sample, re.MULTILINE):
+        normal_score += 3
+        indicators.append('תבנית פתיחה תקינה')
+
+    # פרוטוקול הפוך מתחיל עם "תיריע" או "תצעומ"
+    if re.search(r'^(?:תיירע|תצעומ|לוקוטורפ)', combined_sample, re.MULTILINE):
+        reversed_score += 3
+        indicators.append('תבנית פתיחה הפוכה')
+
+    # חישוב כיוון וביטחון
+    total = normal_score + reversed_score
+    if total == 0:
+        return {'direction': 'normal', 'confidence': 0.5, 'indicators': indicators}
+
+    if normal_score > reversed_score:
+        direction = 'normal'
+        confidence = normal_score / total
+    else:
+        direction = 'reversed'
+        confidence = reversed_score / total
+
+    return {
+        'direction': direction,
+        'confidence': min(confidence, 1.0),
+        'indicators': indicators,
+        'scores': {'normal': normal_score, 'reversed': reversed_score}
+    }
+
+
 def fix_reversed_short_numbers(text, context='budget'):
     """
     תיקון מספרים קצרים (2-3 ספרות) הפוכים בהקשר תקציבי.
@@ -967,6 +1232,21 @@ def parse_protocol_text(text):
         'metadata': {'text_length': len(text)}
     }
 
+    # זיהוי כיוון הטקסט ברמת המסמך
+    direction_info = detect_document_direction(text)
+    extracted_data['metadata']['direction'] = direction_info['direction']
+    extracted_data['metadata']['direction_confidence'] = direction_info['confidence']
+    debug_print(f"DEBUG: Document direction: {direction_info['direction']} (confidence: {direction_info['confidence']:.2f})")
+
+    # אם המסמך הפוך - הפוך את כל הטקסט פעם אחת
+    if direction_info['direction'] == 'reversed' and direction_info['confidence'] > 0.6:
+        debug_print("DEBUG: Reversing entire document text")
+        text = reverse_hebrew_text(text)
+        text = fix_reversed_numbers(text)
+        extracted_data['metadata']['text_was_reversed'] = True
+    else:
+        extracted_data['metadata']['text_was_reversed'] = False
+
     # Extract meeting number
     meeting_no_patterns = [
         r'פרוטוקול\s*(?:מס[\'׳]?\s*)?(\d+/\d+)',
@@ -1169,10 +1449,13 @@ def parse_protocol_text(text):
                             name_part = re.sub(r'\s+', ' ', name_part)
                             # Allow names as short as 3 Hebrew letters (e.g., "מאיר" after OCR cleanup)
                             if 3 <= len(name_part) <= 50:
-                                # Reverse Hebrew text if needed
-                                name_part = reverse_hebrew_text(name_part)
-                                # Try to match partial names to full names from database
-                                name_part = match_partial_name(name_part)
+                                # Smart match: try direct match, then reversed match against DB
+                                matched_name, was_reversed, match_type = smart_match_name(name_part)
+                                if match_type != 'none':
+                                    name_part = matched_name
+                                else:
+                                    # Fallback: try old reverse logic for names not in DB
+                                    name_part = reverse_hebrew_text(name_part)
                                 extracted_data['attendances'].append({
                                     'name': name_part,
                                     'status': 'present'
@@ -1228,10 +1511,13 @@ def parse_protocol_text(text):
 
                         name_part = re.sub(r'[^א-ת\s\'\"]', '', name_part).strip()
                         name_part = re.sub(r'\s+', ' ', name_part)
-                        # Reverse Hebrew text if needed
-                        name_part = reverse_hebrew_text(name_part)
-                        # Try to match partial names to full names from database
-                        name_part = match_partial_name(name_part)
+                        # Smart match: try direct match, then reversed match against DB
+                        matched_name, was_reversed, match_type = smart_match_name(name_part)
+                        if match_type != 'none':
+                            name_part = matched_name
+                        else:
+                            # Fallback: try old reverse logic for names not in DB
+                            name_part = reverse_hebrew_text(name_part)
                         # Accept 0-3 words (relaxed for OCR errors), minimum 3 letters
                         if 3 <= len(name_part) <= 50 and name_part.count(' ') in [0, 1, 2, 3]:
                             extracted_data['attendances'].append({
@@ -1681,15 +1967,25 @@ def parse_protocol_text(text):
         # disc_num_original is the number from PDF (may have duplicates like 1-9, then 1-5)
         disc_num = str(idx)
 
-        # Reverse Hebrew content if needed
-        disc_content_fixed = reverse_hebrew_text(disc_content)
+        # הערה: היפוך טקסט נעשה עכשיו ברמת המסמך ב-parse_protocol_text
+        # אם המסמך זוהה כהפוך, הוא כבר הופך שם.
+        # אם לא הופך - אין צורך להפוך כל דיון בנפרד.
+        disc_content_fixed = disc_content
+
         # Fix reversed numbers in content (e.g., "000,052" → "250,000")
+        # זה עדיין רלוונטי גם אם הטקסט תקין, כי מספרים יכולים להיות הפוכים בנפרד
         disc_content_fixed = fix_reversed_numbers(disc_content_fixed)
+
+        # Apply learned corrections from OCR Learning Agent
+        disc_content_fixed = apply_learned_corrections(disc_content_fixed, 'title')
 
         # Extract title (first line or first 80 chars of content)
         disc_title = disc_content_fixed.split('\n')[0].strip()[:100] if disc_content_fixed else ''
         # Clean up title - remove trailing periods, colons, etc.
         disc_title = re.sub(r'[:\.\s]+$', '', disc_title)
+
+        # Apply learned corrections to title specifically
+        disc_title = apply_learned_corrections(disc_title, 'title')
 
         discussion_data = {
             'number': disc_num,
@@ -1941,6 +2237,9 @@ def parse_protocol_text(text):
         # But also keep the full decision text separately (decision_statement = נוסח ההחלטה)
         if decision_found and discussion_data.get('decision'):
             decision_text = discussion_data['decision']
+            # Apply learned corrections to decision
+            decision_text = apply_learned_corrections(decision_text, 'decision')
+            discussion_data['decision'] = decision_text
             # If it starts with a verb like "מאשרת", "מחליטה", "אושר" - it's likely the full decision text
             # Save the full text and extract just the status
             if re.match(r'(?:מאשרת|מחליטה|מועצת\s+העיר\s+מאשרת|אושר|נדחה)', decision_text, re.IGNORECASE):
