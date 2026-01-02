@@ -1,9 +1,25 @@
 """
-Database models for Yehud-Monosson Municipal Decision System
+Database models for Yehud-Monosson Municipal Decision System.
+
+מודל בסיס הנתונים למערכת החלטות מועצת העיר יהוד-מונוסון
+
+Tables:
+    - terms: קדנציות (תקופות כהונה)
+    - persons: חברי מועצה וסגל
+    - roles: תפקידים (היררכי)
+    - factions: סיעות (היררכי)
+    - boards: ועדות
+    - meetings: ישיבות/פרוטוקולים
+    - discussions: סעיפי דיון
+    - votes: הצבעות
+    - attendances: נוכחות
+    - categories: קטגוריות דיון (היררכי)
+    - discussion_types: סוגי דיון (היררכי)
+    - budget_sources: מקורות מימון
+    - administrative_categories: סיווג מנהלתי לסעיפים (לפי פקודת העיריות)
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Table, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Table, Float, Index
+from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
 Base = declarative_base()
@@ -188,6 +204,9 @@ class Meeting(Base):
     protocol_file = Column(String(500))  # Link to PDF
     board_id = Column(Integer, ForeignKey('boards.id'))
 
+    # Meeting type: 'regular' (מן המניין), 'special' (שלא מן המניין), 'general_assembly' (אסיפה כללית)
+    meeting_type = Column(String(50), nullable=True, default='regular')
+
     # Foreign key to term
     term_id = Column(Integer, ForeignKey('terms.id'))
 
@@ -209,8 +228,10 @@ class Discussion(Base):
     original_id = Column(String(50))
     title = Column(String(500), nullable=False)
     issue_no = Column(String(50))  # Section number
-    expert_opinion = Column(Text)  # Expert recommendation (clean text without HTML)
-    decision = Column(Text)  # Final decision
+    expert_opinion = Column(Text)  # Expert recommendation / דברי הסבר
+    decision = Column(Text)  # Decision status: אושר, לא אושר, ירד מסדר היום, etc.
+    decision_statement = Column(Text)  # Full decision text / נוסח ההחלטה
+    summary = Column(Text)  # AI-generated summary / תקציר
     discussion_date = Column(DateTime, index=True)
 
     # Total budget amount
@@ -222,6 +243,11 @@ class Discussion(Base):
     avoid_counter = Column(Integer, default=0)
     missing_counter = Column(Integer, default=0)
 
+    # Administrative classification (סיווג מנהלתי לפי פקודת העיריות)
+    admin_category_id = Column(Integer, ForeignKey('administrative_categories.id'), nullable=True)
+    admin_category_confidence = Column(Float, nullable=True)  # 0-1 confidence of auto-classification
+    admin_category_auto = Column(Integer, default=0)  # 1 if auto-classified, 0 if manual
+
     # Foreign keys
     meeting_id = Column(Integer, ForeignKey('meetings.id'))
 
@@ -231,6 +257,7 @@ class Discussion(Base):
     categories = relationship('Category', secondary=discussion_category, back_populates='discussions')
     discussion_types = relationship('DiscussionType', secondary=discussion_type_association, back_populates='discussions')
     budget_sources = relationship('BudgetSource', back_populates='discussion', cascade='all, delete-orphan')
+    admin_category = relationship('AdministrativeCategory', back_populates='discussions')
 
     def __repr__(self):
         return f"<Discussion(title='{self.title[:50]}...', id={self.id})>"
@@ -272,20 +299,125 @@ class Vote(Base):
 
 
 class Attendance(Base):
-    """Meeting attendance record"""
+    """Meeting attendance record (רישום נוכחות)"""
     __tablename__ = 'attendances'
+    __table_args__ = (
+        Index('idx_attendance_meeting', 'meeting_id'),
+        Index('idx_attendance_person', 'person_id'),
+    )
 
     id = Column(Integer, primary_key=True)
     person_id = Column(Integer, ForeignKey('persons.id'), nullable=False)
     meeting_id = Column(Integer, ForeignKey('meetings.id'), nullable=False)
 
-    # Attendance status: True = present, False = missing
-    is_present = Column(Integer, nullable=False)  # 0 or 1
+    # Attendance status: 1 = present (נוכח), 0 = absent (נעדר)
+    is_present = Column(Integer, nullable=False, default=1)
 
     # Relationships
     person = relationship('Person', back_populates='attendances')
     meeting = relationship('Meeting', back_populates='attendances')
 
     def __repr__(self):
-        status = "Present" if self.is_present else "Missing"
+        status = "נוכח" if self.is_present else "נעדר"
         return f"<Attendance(person_id={self.person_id}, status='{status}')>"
+
+
+class AdministrativeCategory(Base):
+    """
+    Administrative category for discussions based on Municipal Ordinance
+    סיווג מנהלתי לסעיפים לפי פקודת העיריות
+
+    Categories define what type of municipal action requires council approval,
+    discussion, or just update.
+    """
+    __tablename__ = 'administrative_categories'
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), nullable=False, unique=True, index=True)  # e.g., BUDGET_ANNUAL
+    name_he = Column(String(200), nullable=False)  # Hebrew name: תקציב שנתי
+    name_en = Column(String(200))  # English name: Annual Budget
+    parent_code = Column(String(50), nullable=True)  # Parent category code for hierarchy
+    description = Column(Text)  # Description of what falls under this category
+    decision_level = Column(String(50))  # 'approval', 'discussion', 'update', 'formal'
+    keywords = Column(Text)  # Comma-separated keywords for auto-classification
+
+    # Relationships
+    discussions = relationship('Discussion', back_populates='admin_category')
+
+    def __repr__(self):
+        return f"<AdministrativeCategory(code='{self.code}', name='{self.name_he}')>"
+
+
+# Constants for vote types
+VOTE_YES = 'yes'      # בעד
+VOTE_NO = 'no'        # נגד
+VOTE_AVOID = 'avoid'  # נמנע
+VOTE_MISSING = 'missing'  # חסר
+
+# Constants for meeting types
+MEETING_REGULAR = 'מן המניין'
+MEETING_SPECIAL = 'שלא מן המניין'
+MEETING_ASSEMBLY = 'אסיפה כללית'
+
+# Constants for decision statuses
+DECISION_APPROVED = 'אושר'
+DECISION_REJECTED = 'לא אושר'
+DECISION_REMOVED = 'ירד מסדר היום'
+DECISION_REPORT = 'דיווח ועדכון'
+DECISION_COMMITTEE = 'הופנה לוועדה'
+DECISION_POSTPONED = 'נדחה לדיון נוסף'
+
+# Constants for administrative decision levels
+ADMIN_LEVEL_APPROVAL = 'approval'  # אישור מחייב - המועצה חייבת לאשר
+ADMIN_LEVEL_DISCUSSION = 'discussion'  # דיון והחלטה - דורש דיון והצבעה
+ADMIN_LEVEL_UPDATE = 'update'  # לידיעה - עדכון ודיווח בלבד
+ADMIN_LEVEL_FORMAL = 'formal'  # פורמלי - אישור טכני
+
+# Administrative category codes (matching docs/discussion_types_classification.md)
+ADMIN_BUDGET_ANNUAL = 'BUDGET_ANNUAL'
+ADMIN_BUDGET_TABAR = 'BUDGET_TABAR'
+ADMIN_BUDGET_RESERVE = 'BUDGET_RESERVE'
+ADMIN_BUDGET_TRANSFER = 'BUDGET_TRANSFER'
+ADMIN_CONTRACT_APPROVAL = 'CONTRACT_APPROVAL'
+ADMIN_CONTRACT_TENDER = 'CONTRACT_TENDER'
+ADMIN_CONTRACT_EXCEPTION = 'CONTRACT_EXCEPTION'
+ADMIN_APPOINT_AUDITOR = 'APPOINT_AUDITOR'
+ADMIN_APPOINT_TREASURER = 'APPOINT_TREASURER'
+ADMIN_APPOINT_SENIOR = 'APPOINT_SENIOR'
+ADMIN_APPOINT_COMMITTEE = 'APPOINT_COMMITTEE'
+ADMIN_APPOINT_BOARD = 'APPOINT_BOARD'
+ADMIN_BYLAW_NEW = 'BYLAW_NEW'
+ADMIN_BYLAW_AMENDMENT = 'BYLAW_AMENDMENT'
+ADMIN_BYLAW_FEE = 'BYLAW_FEE'
+ADMIN_PROPERTY_SALE = 'PROPERTY_SALE'
+ADMIN_PROPERTY_PURCHASE = 'PROPERTY_PURCHASE'
+ADMIN_PROPERTY_LEASE = 'PROPERTY_LEASE'
+ADMIN_PROPERTY_ENCUMBRANCE = 'PROPERTY_ENCUMBRANCE'
+ADMIN_LOAN_TAKE = 'LOAN_TAKE'
+ADMIN_LOAN_GUARANTEE = 'LOAN_GUARANTEE'
+ADMIN_LOAN_INVESTMENT = 'LOAN_INVESTMENT'
+ADMIN_CORP_ESTABLISH = 'CORP_ESTABLISH'
+ADMIN_CORP_CHANGE = 'CORP_CHANGE'
+ADMIN_CORP_DISSOLVE = 'CORP_DISSOLVE'
+ADMIN_PLAN_MASTER = 'PLAN_MASTER'
+ADMIN_PLAN_DETAIL = 'PLAN_DETAIL'
+ADMIN_PLAN_EXCEPTION = 'PLAN_EXCEPTION'
+ADMIN_NAME_STREET = 'NAME_STREET'
+ADMIN_NAME_PLACE = 'NAME_PLACE'
+ADMIN_NAME_MEMORIAL = 'NAME_MEMORIAL'
+ADMIN_REPORT_FINANCIAL = 'REPORT_FINANCIAL'
+ADMIN_REPORT_AUDIT = 'REPORT_AUDIT'
+ADMIN_REPORT_ACCOUNTANT = 'REPORT_ACCOUNTANT'
+ADMIN_REPORT_QUARTERLY = 'REPORT_QUARTERLY'
+ADMIN_UPDATE_MAYOR = 'UPDATE_MAYOR'
+ADMIN_UPDATE_QUERY = 'UPDATE_QUERY'
+ADMIN_UPDATE_COMMITTEE = 'UPDATE_COMMITTEE'
+ADMIN_UPDATE_PERSONAL = 'UPDATE_PERSONAL'
+ADMIN_PROTOCOL_COUNCIL = 'PROTOCOL_COUNCIL'
+ADMIN_PROTOCOL_COMMITTEE = 'PROTOCOL_COMMITTEE'
+ADMIN_EMERGENCY_DECISION = 'EMERGENCY_DECISION'
+ADMIN_EMERGENCY_REPORT = 'EMERGENCY_REPORT'
+ADMIN_WELFARE_PROGRAM = 'WELFARE_PROGRAM'
+ADMIN_EDUCATION_PROGRAM = 'EDUCATION_PROGRAM'
+ADMIN_OTHER_GENERAL = 'OTHER_GENERAL'
+ADMIN_OTHER_CEREMONY = 'OTHER_CEREMONY'

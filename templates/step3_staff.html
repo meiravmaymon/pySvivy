@@ -1,0 +1,663 @@
+{% extends "base.html" %}
+
+{% block title %}סגל - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .staff-card {
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+    .staff-card.valid {
+        border-color: #198754;
+        background: #d1e7dd;
+    }
+    .staff-card.reversed {
+        border-color: #fd7e14;
+        background: #fff3cd;
+    }
+    .staff-card.new {
+        border-color: #0d6efd;
+        background: #cfe2ff;
+    }
+    .staff-card.error {
+        border-color: #dc3545;
+        background: #f8d7da;
+    }
+    .staff-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .reversed-text {
+        direction: ltr;
+        unicode-bidi: bidi-override;
+        color: #856404;
+        background: #ffeeba;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    .fixed-text {
+        color: #155724;
+        background: #c3e6cb;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    .action-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .edit-form {
+        display: none;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px dashed #dee2e6;
+    }
+    .edit-form.show {
+        display: block;
+    }
+    .legend {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 2px solid;
+    }
+    .section-header {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-badge"></i>
+                    סגל ותפקידים
+                </h4>
+                <span class="badge bg-primary">שלב 3 מתוך 4</span>
+            </div>
+            <div class="card-body">
+                <!-- Legend -->
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #d1e7dd; border-color: #198754;"></div>
+                        <span>תקין - מאומת</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #fff3cd; border-color: #fd7e14;"></div>
+                        <span>טקסט הפוך - דורש תיקון</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #cfe2ff; border-color: #0d6efd;"></div>
+                        <span>חדש - להוספה לבסיס הנתונים</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f8d7da; border-color: #dc3545;"></div>
+                        <span>שגיאה - דורש עריכה ידנית</span>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>הוראות:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><strong>טקסט הפוך</strong> - לחץ "הפוך טקסט" לתיקון אוטומטי, או "ערוך" לתיקון ידני</li>
+                        <li><strong>סגל חדש</strong> - לחץ "שמור לבסיס נתונים" להוספת האדם והתפקיד</li>
+                        <li><strong>שגיאה</strong> - לחץ "ערוך" לתיקון ידני או "מחק" להתעלמות</li>
+                    </ul>
+                </div>
+
+                <!-- Staff List -->
+                <div class="section-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-people"></i>
+                        אנשי סגל שזוהו ({{ extracted_staff|length }})
+                    </h5>
+                </div>
+
+                <div id="staffList">
+                    {% for staff in extracted_staff %}
+                    {% set is_reversed = staff.name and (staff.name[0] < 'א' or staff.name[0] > 'ת') %}
+                    <div class="staff-card {% if is_reversed %}reversed{% else %}valid{% endif %}"
+                         data-index="{{ loop.index0 }}"
+                         data-name="{{ staff.name }}"
+                         data-role="{{ staff.role or '' }}">
+                        <div class="card-header">
+                            <div>
+                                <span class="badge {% if is_reversed %}bg-warning text-dark{% else %}bg-success{% endif %} me-2">
+                                    {{ loop.index }}
+                                </span>
+                                {% if is_reversed %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-exclamation-triangle"></i> טקסט הפוך
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="action-bar">
+                                {% if is_reversed %}
+                                <button class="btn btn-sm btn-warning reverse-btn" title="הפוך טקסט">
+                                    <i class="bi bi-arrow-left-right"></i> הפוך
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-primary edit-btn" title="ערוך">
+                                    <i class="bi bi-pencil"></i> ערוך
+                                </button>
+                                <button class="btn btn-sm btn-outline-success save-to-db-btn" title="שמור לבסיס נתונים">
+                                    <i class="bi bi-database-add"></i> שמור ל-DB
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-btn" title="מחק">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted">שם</label>
+                                <div class="display-name fs-5">
+                                    {% if is_reversed %}
+                                    <span class="reversed-text">{{ staff.name }}</span>
+                                    {% else %}
+                                    {{ staff.name }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted">תפקיד</label>
+                                <div class="display-role fs-5">
+                                    {% if is_reversed %}
+                                    <span class="reversed-text">{{ staff.role or 'לא זוהה' }}</span>
+                                    {% else %}
+                                    {{ staff.role or 'לא זוהה' }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Edit Form (hidden by default) -->
+                        <div class="edit-form">
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <label class="form-label">שם (מתוקן)</label>
+                                    <input type="text" class="form-control edit-name" value="{{ staff.name }}">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">תפקיד (מתוקן)</label>
+                                    <input type="text" class="form-control edit-role" value="{{ staff.role or '' }}"
+                                           list="rolesList">
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button class="btn btn-success w-100 apply-edit-btn">
+                                        <i class="bi bi-check"></i> אשר
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        לא זוהו אנשי סגל בפרוטוקול.
+                        <button class="btn btn-sm btn-primary ms-3" id="addNewStaffBtn">
+                            <i class="bi bi-plus"></i> הוסף ידנית
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Add New Staff Button -->
+                {% if extracted_staff %}
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary" id="addNewStaffBtn">
+                        <i class="bi bi-plus-circle"></i> הוסף איש סגל חדש
+                    </button>
+                </div>
+                {% endif %}
+
+                <!-- New Staff Form (hidden) -->
+                <div class="card mt-3 d-none" id="newStaffForm">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-person-plus"></i> הוספת איש סגל חדש</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label">שם</label>
+                                <input type="text" class="form-control" id="newStaffName">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">תפקיד</label>
+                                <input type="text" class="form-control" id="newStaffRole" list="rolesList">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end gap-2">
+                                <button class="btn btn-success" id="saveNewStaffBtn">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                <button class="btn btn-secondary" id="cancelNewStaffBtn">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Roles Datalist -->
+                <datalist id="rolesList">
+                    <option value="מנכ״ל">
+                    <option value="גזבר">
+                    <option value="גזברית">
+                    <option value="יועמ״ש">
+                    <option value="יועץ משפטי">
+                    <option value="מבקר העירייה">
+                    <option value="מהנדס העיר">
+                    <option value="מנהל אגף">
+                    <option value="מנהלת אגף">
+                    <option value="דובר העירייה">
+                    <option value="מזכיר המועצה">
+                    <option value="עוזר ראש העיר">
+                </datalist>
+
+                <!-- Summary -->
+                <div class="card bg-light mt-4">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart"></i> סיכום
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <strong>סה"כ זוהו</strong><br>
+                                <span class="fs-4 text-primary" id="totalCount">{{ extracted_staff|length }}</span>
+                            </div>
+                            <div class="col-4">
+                                <strong>תקינים</strong><br>
+                                <span class="fs-4 text-success" id="validCount">0</span>
+                            </div>
+                            <div class="col-4">
+                                <strong>דורשים תיקון</strong><br>
+                                <span class="fs-4 text-warning" id="needFixCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/step/2" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור לנוכחות
+                    </a>
+                    <div>
+                        <button class="btn btn-success me-2" id="saveAllStaffBtn">
+                            <i class="bi bi-check-all"></i> שמור הכל ל-DB
+                        </button>
+                        <a href="/step/4" class="btn btn-primary btn-lg">
+                            המשך לסעיפים
+                            <i class="bi bi-arrow-left"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Reverse Hebrew text
+function reverseText(text) {
+    return text.split('').reverse().join('');
+}
+
+// Update counts
+function updateCounts() {
+    const cards = document.querySelectorAll('.staff-card');
+    const valid = document.querySelectorAll('.staff-card.valid').length;
+    const needFix = cards.length - valid;
+
+    document.getElementById('totalCount').textContent = cards.length;
+    document.getElementById('validCount').textContent = valid;
+    document.getElementById('needFixCount').textContent = needFix;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateCounts();
+
+    // Reverse button
+    document.querySelectorAll('.reverse-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const card = this.closest('.staff-card');
+            const nameEl = card.querySelector('.display-name');
+            const roleEl = card.querySelector('.display-role');
+            const nameInput = card.querySelector('.edit-name');
+            const roleInput = card.querySelector('.edit-role');
+
+            // Get current values
+            const currentName = card.dataset.name;
+            const currentRole = card.dataset.role;
+
+            // Reverse
+            const reversedName = reverseText(currentName);
+            const reversedRole = currentRole ? reverseText(currentRole) : '';
+
+            // Update display
+            nameEl.innerHTML = reversedName;
+            roleEl.innerHTML = reversedRole || 'לא זוהה';
+
+            // Update inputs
+            nameInput.value = reversedName;
+            roleInput.value = reversedRole;
+
+            // Update data attributes
+            card.dataset.name = reversedName;
+            card.dataset.role = reversedRole;
+
+            // Change card style
+            card.classList.remove('reversed');
+            card.classList.add('valid');
+
+            // Hide reverse button
+            this.style.display = 'none';
+
+            showToast('הטקסט הופך בהצלחה');
+            updateCounts();
+        });
+    });
+
+    // Edit button
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const card = this.closest('.staff-card');
+            const form = card.querySelector('.edit-form');
+            form.classList.toggle('show');
+            this.innerHTML = form.classList.contains('show')
+                ? '<i class="bi bi-x"></i> בטל'
+                : '<i class="bi bi-pencil"></i> ערוך';
+        });
+    });
+
+    // Apply edit button
+    document.querySelectorAll('.apply-edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const card = this.closest('.staff-card');
+            const nameInput = card.querySelector('.edit-name');
+            const roleInput = card.querySelector('.edit-role');
+            const nameEl = card.querySelector('.display-name');
+            const roleEl = card.querySelector('.display-role');
+
+            // Update display
+            nameEl.textContent = nameInput.value;
+            roleEl.textContent = roleInput.value || 'לא זוהה';
+
+            // Update data
+            card.dataset.name = nameInput.value;
+            card.dataset.role = roleInput.value;
+
+            // Update style
+            card.classList.remove('reversed', 'error');
+            card.classList.add('valid');
+
+            // Hide form
+            card.querySelector('.edit-form').classList.remove('show');
+            card.querySelector('.edit-btn').innerHTML = '<i class="bi bi-pencil"></i> ערוך';
+
+            // Hide reverse button if exists
+            const reverseBtn = card.querySelector('.reverse-btn');
+            if (reverseBtn) reverseBtn.style.display = 'none';
+
+            showToast('השינויים נשמרו');
+            updateCounts();
+        });
+    });
+
+    // Delete button
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('האם למחוק רשומה זו?')) {
+                this.closest('.staff-card').remove();
+                showToast('הרשומה נמחקה');
+                updateCounts();
+            }
+        });
+    });
+
+    // Save to DB button
+    document.querySelectorAll('.save-to-db-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const card = this.closest('.staff-card');
+            const name = card.dataset.name;
+            const role = card.dataset.role;
+
+            try {
+                const response = await fetch('/api/save_staff', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name, role })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    card.classList.remove('new', 'reversed');
+                    card.classList.add('valid');
+                    this.innerHTML = '<i class="bi bi-check"></i> נשמר';
+                    this.disabled = true;
+                    showToast('נשמר לבסיס הנתונים');
+                } else {
+                    showToast(result.error || 'שגיאה בשמירה', 'danger');
+                }
+            } catch (error) {
+                showToast('שגיאה בשמירה', 'danger');
+            }
+        });
+    });
+
+    // Add new staff button
+    document.getElementById('addNewStaffBtn')?.addEventListener('click', function() {
+        document.getElementById('newStaffForm').classList.remove('d-none');
+        document.getElementById('newStaffName').focus();
+    });
+
+    // Cancel new staff
+    document.getElementById('cancelNewStaffBtn')?.addEventListener('click', function() {
+        document.getElementById('newStaffForm').classList.add('d-none');
+        document.getElementById('newStaffName').value = '';
+        document.getElementById('newStaffRole').value = '';
+    });
+
+    // Save new staff
+    document.getElementById('saveNewStaffBtn')?.addEventListener('click', function() {
+        const name = document.getElementById('newStaffName').value.trim();
+        const role = document.getElementById('newStaffRole').value.trim();
+
+        if (!name) {
+            showToast('יש להזין שם', 'warning');
+            return;
+        }
+
+        // Add new card
+        const staffList = document.getElementById('staffList');
+        const count = staffList.querySelectorAll('.staff-card').length + 1;
+
+        const newCard = document.createElement('div');
+        newCard.className = 'staff-card new';
+        newCard.dataset.name = name;
+        newCard.dataset.role = role;
+        newCard.innerHTML = `
+            <div class="card-header">
+                <div>
+                    <span class="badge bg-info me-2">${count}</span>
+                    <span class="badge bg-info">חדש</span>
+                </div>
+                <div class="action-bar">
+                    <button class="btn btn-sm btn-outline-primary edit-btn" title="ערוך">
+                        <i class="bi bi-pencil"></i> ערוך
+                    </button>
+                    <button class="btn btn-sm btn-outline-success save-to-db-btn" title="שמור לבסיס נתונים">
+                        <i class="bi bi-database-add"></i> שמור ל-DB
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger delete-btn" title="מחק">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label small text-muted">שם</label>
+                    <div class="display-name fs-5">${name}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small text-muted">תפקיד</label>
+                    <div class="display-role fs-5">${role || 'לא זוהה'}</div>
+                </div>
+            </div>
+            <div class="edit-form">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">שם (מתוקן)</label>
+                        <input type="text" class="form-control edit-name" value="${name}">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">תפקיד (מתוקן)</label>
+                        <input type="text" class="form-control edit-role" value="${role}" list="rolesList">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-success w-100 apply-edit-btn">
+                            <i class="bi bi-check"></i> אשר
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        staffList.appendChild(newCard);
+
+        // Re-attach event listeners to new card
+        attachCardListeners(newCard);
+
+        // Clear and hide form
+        document.getElementById('newStaffForm').classList.add('d-none');
+        document.getElementById('newStaffName').value = '';
+        document.getElementById('newStaffRole').value = '';
+
+        showToast('איש סגל נוסף');
+        updateCounts();
+    });
+
+    // Save all to DB
+    document.getElementById('saveAllStaffBtn')?.addEventListener('click', async function() {
+        const cards = document.querySelectorAll('.staff-card');
+        let saved = 0;
+
+        for (const card of cards) {
+            if (card.classList.contains('valid') || card.classList.contains('new')) {
+                const name = card.dataset.name;
+                const role = card.dataset.role;
+
+                try {
+                    const response = await fetch('/api/save_staff', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ name, role })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        saved++;
+                        card.classList.remove('new');
+                        card.classList.add('valid');
+                    }
+                } catch (error) {
+                    console.error('Error saving:', error);
+                }
+            }
+        }
+
+        showToast(`נשמרו ${saved} רשומות`);
+    });
+});
+
+function attachCardListeners(card) {
+    // Edit button
+    card.querySelector('.edit-btn')?.addEventListener('click', function() {
+        const form = card.querySelector('.edit-form');
+        form.classList.toggle('show');
+        this.innerHTML = form.classList.contains('show')
+            ? '<i class="bi bi-x"></i> בטל'
+            : '<i class="bi bi-pencil"></i> ערוך';
+    });
+
+    // Apply edit
+    card.querySelector('.apply-edit-btn')?.addEventListener('click', function() {
+        const nameInput = card.querySelector('.edit-name');
+        const roleInput = card.querySelector('.edit-role');
+
+        card.querySelector('.display-name').textContent = nameInput.value;
+        card.querySelector('.display-role').textContent = roleInput.value || 'לא זוהה';
+        card.dataset.name = nameInput.value;
+        card.dataset.role = roleInput.value;
+        card.classList.remove('reversed', 'error', 'new');
+        card.classList.add('valid');
+        card.querySelector('.edit-form').classList.remove('show');
+
+        showToast('השינויים נשמרו');
+        updateCounts();
+    });
+
+    // Delete
+    card.querySelector('.delete-btn')?.addEventListener('click', function() {
+        if (confirm('האם למחוק רשומה זו?')) {
+            card.remove();
+            showToast('הרשומה נמחקה');
+            updateCounts();
+        }
+    });
+
+    // Save to DB
+    card.querySelector('.save-to-db-btn')?.addEventListener('click', async function() {
+        const name = card.dataset.name;
+        const role = card.dataset.role;
+
+        try {
+            const response = await fetch('/api/save_staff', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, role })
+            });
+            const result = await response.json();
+            if (result.success) {
+                card.classList.add('valid');
+                this.innerHTML = '<i class="bi bi-check"></i> נשמר';
+                this.disabled = true;
+                showToast('נשמר לבסיס הנתונים');
+            }
+        } catch (error) {
+            showToast('שגיאה בשמירה', 'danger');
+        }
+    });
+}
+</script>
+{% endblock %}

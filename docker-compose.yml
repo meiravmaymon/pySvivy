@@ -1,0 +1,48 @@
+# Svivy Municipal System - Docker Compose
+# מערכת סביבי - ניהול פרוטוקולים עירוניים
+# ==========================================
+
+version: '3.8'
+
+services:
+  svivy-ocr:
+    build: .
+    container_name: svivy-ocr-app
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist database
+      - ./svivyNew.db:/app/svivyNew.db
+      # Persist uploaded files
+      - ./uploads:/app/uploads
+      # Persist processed protocols
+      - ./protocols_pdf:/app/protocols_pdf
+      # Persist OCR results
+      - ./ocr_results:/app/ocr_results
+      # Persist logs
+      - ./logs:/app/logs
+      # Learning data
+      - ./ocr_learning_data.json:/app/ocr_learning_data.json
+    environment:
+      - SVIVY_ENV=production
+      - SVIVY_DEBUG=false
+      - SVIVY_SECRET_KEY=${SVIVY_SECRET_KEY:-change_me_in_production}
+      - OLLAMA_HOST=http://ollama:11434
+    restart: unless-stopped
+    depends_on:
+      - ollama
+
+  # Optional: Ollama for LLM features
+  ollama:
+    image: ollama/ollama:latest
+    container_name: svivy-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Pull the model after container starts
+    # Run manually: docker exec svivy-ollama ollama pull gemma3:1b
+
+volumes:
+  ollama_data:

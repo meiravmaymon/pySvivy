@@ -1,0 +1,770 @@
+{% extends "base.html" %}
+
+{% block title %}סעיפים לא מותאמים - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .unmatched-section {
+        margin-bottom: 40px;
+    }
+    .section-header {
+        padding: 15px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    .section-db {
+        background: linear-gradient(135deg, #cfe2ff, #b6d4fe);
+        border: 2px solid #0d6efd;
+    }
+    .section-ocr {
+        background: linear-gradient(135deg, #fff3cd, #ffe69c);
+        border: 2px solid #ffc107;
+    }
+    .unmatched-card {
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        overflow: hidden;
+    }
+    .unmatched-header {
+        padding: 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .db-card .unmatched-header {
+        background: linear-gradient(135deg, #f0f7ff, #e7f1ff);
+    }
+    .ocr-card .unmatched-header {
+        background: linear-gradient(135deg, #fffbeb, #fff8e1);
+    }
+    .unmatched-body {
+        padding: 20px;
+        display: none;
+        border-top: 1px solid #dee2e6;
+    }
+    .unmatched-body.show {
+        display: block;
+    }
+    .item-number {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        margin-left: 10px;
+    }
+    .db-card .item-number { background: #0d6efd; color: white; }
+    .ocr-card .item-number { background: #ffc107; color: #212529; }
+    .field-display {
+        margin-bottom: 15px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .field-label {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 5px;
+    }
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 2px dashed #dee2e6;
+    }
+    .phase-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+    .phase-step {
+        padding: 10px 20px;
+        border-radius: 20px;
+        background: #e9ecef;
+        color: #6c757d;
+    }
+    .phase-step.active {
+        background: #0d6efd;
+        color: white;
+    }
+    .phase-step.completed {
+        background: #198754;
+        color: white;
+    }
+    .decision-select {
+        max-width: 200px;
+    }
+    .vote-inputs {
+        display: flex;
+        gap: 10px;
+    }
+    .vote-inputs input {
+        width: 70px;
+    }
+    .vote-inputs label {
+        font-size: 0.85em;
+        color: #6c757d;
+    }
+    .status-badge {
+        font-size: 0.9em;
+    }
+    .card-removed {
+        opacity: 0.5;
+        background: #f8f9fa;
+    }
+    .card-kept {
+        border-color: #198754;
+    }
+    .budget-display {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .budget-source {
+        padding: 4px 10px;
+        background: #e9ecef;
+        border-radius: 12px;
+        font-size: 0.85em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-question-circle"></i>
+                    סעיפים לא מותאמים - שלב 3
+                </h4>
+                <span class="badge bg-primary">שלב 4ג מתוך 5</span>
+            </div>
+            <div class="card-body">
+                <!-- Phase Indicator -->
+                <div class="phase-indicator">
+                    <div class="phase-step completed">1. קישור סעיפים</div>
+                    <div class="phase-step completed">2. השוואת שדות</div>
+                    <div class="phase-step active">3. סעיפים לא מותאמים</div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>הוראות:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>סעיפים מ-DB בלבד: החלט אם לשמור אותם כמו שהם או למחוק</li>
+                        <li>סעיפים מ-OCR בלבד: החלט אם להוסיף אותם לבסיס הנתונים או להתעלם</li>
+                    </ul>
+                </div>
+
+                <!-- DB Only Section -->
+                <div class="unmatched-section">
+                    <div class="section-header section-db d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-database"></i>
+                            סעיפים מבסיס הנתונים בלבד ({{ db_only|length }})
+                        </h5>
+                        <div>
+                            <button class="btn btn-outline-primary btn-sm" onclick="keepAllDb()">
+                                <i class="bi bi-check-all"></i> שמור הכל
+                            </button>
+                        </div>
+                    </div>
+
+                    {% if db_only %}
+                    <div id="dbOnlyList">
+                        {% for item in db_only %}
+                        <div class="unmatched-card db-card" data-id="{{ item.id }}">
+                            <div class="unmatched-header" onclick="toggleUnmatched(this)">
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="item-number">#{{ item.number }}</span>
+                                    <strong>{{ item.title[:60] }}{% if item.title|length > 60 %}...{% endif %}</strong>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="status-badge badge bg-light text-dark">ממתין</span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="unmatched-body">
+                                <!-- Title -->
+                                <div class="field-display">
+                                    <div class="field-label">כותרת</div>
+                                    {{ item.title or 'לא מוגדר' }}
+                                </div>
+
+                                <!-- Decision -->
+                                <div class="field-display">
+                                    <div class="field-label">החלטה</div>
+                                    {{ item.decision or 'לא מוגדר' }}
+                                </div>
+
+                                <!-- Votes -->
+                                <div class="field-display">
+                                    <div class="field-label">הצבעה</div>
+                                    <span class="badge bg-success">בעד: {{ item.yes_votes }}</span>
+                                    <span class="badge bg-danger">נגד: {{ item.no_votes }}</span>
+                                    <span class="badge bg-warning text-dark">נמנע: {{ item.avoid_votes }}</span>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="action-buttons">
+                                    <button class="btn btn-success" onclick="keepDbItem(this, {{ item.id }})">
+                                        <i class="bi bi-check-lg"></i> שמור כמו שהוא
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="removeDbItem(this, {{ item.id }})">
+                                        <i class="bi bi-trash"></i> הסר מבסיס הנתונים
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i>
+                        אין סעיפים מבסיס הנתונים שלא הותאמו
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- OCR Only Section -->
+                <div class="unmatched-section">
+                    <div class="section-header section-ocr d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-file-pdf"></i>
+                            סעיפים מ-OCR בלבד ({{ ocr_only|length }})
+                        </h5>
+                        <div>
+                            <button class="btn btn-outline-warning btn-sm" onclick="addAllOcr()">
+                                <i class="bi bi-plus-lg"></i> הוסף הכל ל-DB
+                            </button>
+                        </div>
+                    </div>
+
+                    {% if ocr_only %}
+                    <div id="ocrOnlyList">
+                        {% for item in ocr_only %}
+                        <div class="unmatched-card ocr-card" data-number="{{ item.number }}">
+                            <div class="unmatched-header" onclick="toggleUnmatched(this)">
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="item-number">#{{ item.number }}</span>
+                                    <strong>{{ item.content[:60] if item.content else 'ללא כותרת' }}{% if item.content and item.content|length > 60 %}...{% endif %}</strong>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if item.decision %}
+                                    <span class="badge {% if 'אושר' in item.decision %}bg-success{% elif 'נדחה' in item.decision %}bg-danger{% else %}bg-secondary{% endif %}">
+                                        {{ item.decision[:15] }}
+                                    </span>
+                                    {% endif %}
+                                    <span class="status-badge badge bg-light text-dark">ממתין</span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                            <div class="unmatched-body">
+                                <!-- Content/Title -->
+                                <div class="field-display">
+                                    <div class="field-label">תוכן / כותרת</div>
+                                    {{ item.content or 'לא זוהה' }}
+                                </div>
+
+                                <!-- Decision -->
+                                <div class="field-display">
+                                    <div class="field-label">החלטה</div>
+                                    {{ item.decision or 'לא זוהתה' }}
+                                </div>
+
+                                <!-- Votes -->
+                                <div class="field-display">
+                                    <div class="field-label">הצבעה</div>
+                                    {% if item.vote_type == 'unanimous' %}
+                                    <span class="badge bg-success">פה אחד</span>
+                                    {% else %}
+                                    <span class="badge bg-success">בעד: {{ item.yes_votes or 0 }}</span>
+                                    <span class="badge bg-danger">נגד: {{ item.no_votes or 0 }}</span>
+                                    <span class="badge bg-warning text-dark">נמנע: {{ item.avoid_votes or 0 }}</span>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Expert Opinion -->
+                                {% if item.expert_opinion %}
+                                <div class="field-display">
+                                    <div class="field-label"><i class="bi bi-lightbulb text-warning"></i> דעת מומחה</div>
+                                    <div style="max-height: 100px; overflow-y: auto;">
+                                        {{ item.expert_opinion }}
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                <!-- Budget -->
+                                {% if item.budget %}
+                                <div class="field-display">
+                                    <div class="field-label"><i class="bi bi-currency-exchange text-success"></i> תקציב</div>
+                                    <strong>{{ "{:,.0f}".format(item.budget) }} ₪</strong>
+                                    {% if item.budget_sources %}
+                                    <div class="budget-display">
+                                        {% for src in item.budget_sources %}
+                                        <span class="budget-source">{{ src.source }}: {{ "{:,.0f}".format(src.amount) }}₪</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                <!-- Edit Form for Adding to DB -->
+                                <div class="card mt-3 bg-light">
+                                    <div class="card-header">
+                                        <i class="bi bi-pencil"></i> עריכה לפני הוספה
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-8">
+                                                <label class="form-label">כותרת</label>
+                                                <input type="text" class="form-control ocr-title-input"
+                                                       value="{{ item.content[:200] if item.content else '' }}">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">סטטוס החלטה</label>
+                                                <select class="form-select ocr-decision-select">
+                                                    <option value="">-- בחר --</option>
+                                                    <option value="אושר" {% if item.decision and 'אושר' in item.decision and 'פה אחד' not in item.decision %}selected{% endif %}>אושר</option>
+                                                    <option value="נדחה" {% if item.decision and 'נדחה' in item.decision %}selected{% endif %}>נדחה</option>
+                                                    <option value="אושר פה אחד" {% if item.decision and 'פה אחד' in item.decision %}selected{% endif %}>אושר פה אחד</option>
+                                                    <option value="דיווח ועדכון" {% if item.decision and 'דיווח' in item.decision %}selected{% endif %}>דיווח ועדכון</option>
+                                                    <option value="ירד מסדר היום" {% if item.decision and 'ירד' in item.decision %}selected{% endif %}>ירד מסדר היום</option>
+                                                    <option value="הועבר לדיון" {% if item.decision and 'הועבר' in item.decision %}selected{% endif %}>הועבר לדיון</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- נוסח ההחלטה המלא -->
+                                        <div class="mb-3">
+                                            <label class="form-label">נוסח ההחלטה המלא</label>
+                                            <textarea class="form-control ocr-decision-statement" rows="3"
+                                                      placeholder="נוסח ההחלטה כפי שמופיע בפרוטוקול...">{{ item.decision_statement or item.decision or '' }}</textarea>
+                                        </div>
+
+                                        <!-- דעת מומחה -->
+                                        <div class="mb-3">
+                                            <label class="form-label">דעת מומחה / דברי הסבר</label>
+                                            <textarea class="form-control ocr-expert-opinion" rows="2"
+                                                      placeholder="דעת מומחה או דברי הסבר...">{{ item.expert_opinion or '' }}</textarea>
+                                        </div>
+
+                                        <!-- סיווג מנהלתי -->
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label">סיווג מנהלתי</label>
+                                                <select class="form-select ocr-admin-category admin-category-select">
+                                                    <option value="">-- בחר סיווג --</option>
+                                                    <!-- Options loaded dynamically -->
+                                                </select>
+                                                {% if item.admin_category_code %}
+                                                <small class="text-muted">זוהה אוטומטית: {{ item.admin_category_code }}</small>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label">הצבעות</label>
+                                                <div class="vote-inputs">
+                                                    <div>
+                                                        <label>בעד</label>
+                                                        <input type="number" class="form-control ocr-vote-yes"
+                                                               value="{{ item.yes_votes or (15 if item.vote_type == 'unanimous' else 0) }}" min="0">
+                                                    </div>
+                                                    <div>
+                                                        <label>נגד</label>
+                                                        <input type="number" class="form-control ocr-vote-no"
+                                                               value="{{ item.no_votes or 0 }}" min="0">
+                                                    </div>
+                                                    <div>
+                                                        <label>נמנע</label>
+                                                        <input type="number" class="form-control ocr-vote-avoid"
+                                                               value="{{ item.avoid_votes or 0 }}" min="0">
+                                                    </div>
+                                                    <div class="align-self-end">
+                                                        <button class="btn btn-outline-secondary btn-sm" onclick="setUnanimousOcr(this)">
+                                                            פה אחד
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" onclick="addOcrToDb(this, '{{ item.number }}')">
+                                        <i class="bi bi-plus-lg"></i> הוסף לבסיס הנתונים
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="showIgnoreReason(this)">
+                                        <i class="bi bi-x-lg"></i> התעלם
+                                    </button>
+                                </div>
+
+                                <!-- סיבת התעלמות (נסתר בהתחלה) -->
+                                <div class="ignore-reason-area mt-2" style="display: none;">
+                                    <div class="card bg-warning bg-opacity-10 border-warning">
+                                        <div class="card-body py-2">
+                                            <label class="form-label small"><i class="bi bi-question-circle"></i> למה להתעלם מסעיף זה?</label>
+                                            <select class="form-select form-select-sm ignore-reason-select mb-2">
+                                                <option value="">-- בחר סיבה --</option>
+                                                <option value="ocr_error">שגיאת OCR - הטקסט לא נקרא נכון</option>
+                                                <option value="duplicate">כפילות - הסעיף קיים כבר</option>
+                                                <option value="not_discussion">לא סעיף דיון - טקסט אחר</option>
+                                                <option value="incomplete">מידע חלקי - לא ניתן להשלים</option>
+                                                <option value="wrong_meeting">לא שייך לישיבה זו</option>
+                                                <option value="other">אחר</option>
+                                            </select>
+                                            <textarea class="form-control form-control-sm ignore-reason-text" rows="2"
+                                                      placeholder="הסבר נוסף (אופציונלי - יעזור לשפר את ה-OCR)..."></textarea>
+                                            <div class="mt-2 d-flex gap-2">
+                                                <button class="btn btn-sm btn-secondary" onclick="confirmIgnore(this, '{{ item.number }}')">
+                                                    <i class="bi bi-check"></i> אשר התעלמות
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" onclick="cancelIgnore(this)">
+                                                    ביטול
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i>
+                        אין סעיפים מ-OCR שלא הותאמו
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Bottom Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/step/4b" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור להשוואת שדות
+                    </a>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary" id="moveToProcessedBtn" onclick="moveToProcessed()">
+                            <i class="bi bi-folder-symlink"></i>
+                            העבר ל-worked_on
+                        </button>
+                        <button class="btn btn-success btn-lg" onclick="finishValidation()">
+                            <i class="bi bi-check-all"></i>
+                            סיים ולידציה
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleUnmatched(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('show');
+}
+
+function setUnanimousOcr(btn) {
+    const card = btn.closest('.unmatched-card');
+    card.querySelector('.ocr-vote-yes').value = 15;
+    card.querySelector('.ocr-vote-no').value = 0;
+    card.querySelector('.ocr-vote-avoid').value = 0;
+    card.querySelector('.ocr-decision-select').value = 'אושר פה אחד';
+    showToast('הוגדר: פה אחד');
+}
+
+async function keepDbItem(btn, id) {
+    const card = btn.closest('.unmatched-card');
+    card.classList.add('card-kept');
+    const statusBadge = card.querySelector('.status-badge');
+    statusBadge.textContent = 'נשמר';
+    statusBadge.classList.remove('bg-light', 'text-dark');
+    statusBadge.classList.add('bg-success');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> נשמר';
+    showToast('הסעיף יישמר');
+}
+
+async function removeDbItem(btn, id) {
+    if (!confirm('האם למחוק סעיף זה מבסיס הנתונים?')) return;
+
+    try {
+        const response = await fetch('/api/delete_discussion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({discussion_id: id})
+        });
+        const result = await response.json();
+        if (result.success) {
+            const card = btn.closest('.unmatched-card');
+            card.classList.add('card-removed');
+            const statusBadge = card.querySelector('.status-badge');
+            statusBadge.textContent = 'הוסר';
+            statusBadge.classList.remove('bg-light', 'text-dark');
+            statusBadge.classList.add('bg-danger');
+            showToast('הסעיף הוסר');
+        } else {
+            showToast(result.error || 'שגיאה במחיקה', 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה במחיקה', 'danger');
+    }
+}
+
+function keepAllDb() {
+    document.querySelectorAll('.db-card:not(.card-removed):not(.card-kept)').forEach(card => {
+        const keepBtn = card.querySelector('.btn-success');
+        if (keepBtn && !keepBtn.disabled) {
+            card.classList.add('card-kept');
+            const statusBadge = card.querySelector('.status-badge');
+            statusBadge.textContent = 'נשמר';
+            statusBadge.classList.remove('bg-light', 'text-dark');
+            statusBadge.classList.add('bg-success');
+            keepBtn.disabled = true;
+            keepBtn.innerHTML = '<i class="bi bi-check-lg"></i> נשמר';
+        }
+    });
+    showToast('כל הסעיפים סומנו לשמירה');
+}
+
+async function addOcrToDb(btn, number) {
+    const card = btn.closest('.unmatched-card');
+
+    const data = {
+        issue_no: number,
+        title: card.querySelector('.ocr-title-input')?.value || '',
+        decision: card.querySelector('.ocr-decision-select')?.value || '',
+        decision_statement: card.querySelector('.ocr-decision-statement')?.value || '',
+        expert_opinion: card.querySelector('.ocr-expert-opinion')?.value || '',
+        admin_category_code: card.querySelector('.ocr-admin-category')?.value || '',
+        yes_votes: parseInt(card.querySelector('.ocr-vote-yes')?.value) || 0,
+        no_votes: parseInt(card.querySelector('.ocr-vote-no')?.value) || 0,
+        avoid_votes: parseInt(card.querySelector('.ocr-vote-avoid')?.value) || 0
+    };
+
+    try {
+        const response = await fetch('/api/add_discussion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            card.classList.add('card-kept');
+            const statusBadge = card.querySelector('.status-badge');
+            statusBadge.textContent = 'נוסף';
+            statusBadge.classList.remove('bg-light', 'text-dark');
+            statusBadge.classList.add('bg-success');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> נוסף';
+            showToast('הסעיף נוסף לבסיס הנתונים');
+        } else {
+            showToast(result.error || 'שגיאה בהוספה', 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בהוספה', 'danger');
+    }
+}
+
+function showIgnoreReason(btn) {
+    const card = btn.closest('.unmatched-card');
+    const reasonArea = card.querySelector('.ignore-reason-area');
+    reasonArea.style.display = 'block';
+    btn.style.display = 'none';
+}
+
+function cancelIgnore(btn) {
+    const card = btn.closest('.unmatched-card');
+    const reasonArea = card.querySelector('.ignore-reason-area');
+    reasonArea.style.display = 'none';
+    const ignoreBtn = card.querySelector('.action-buttons .btn-outline-warning');
+    if (ignoreBtn) ignoreBtn.style.display = '';
+}
+
+async function confirmIgnore(btn, number) {
+    const card = btn.closest('.unmatched-card');
+    const reasonSelect = card.querySelector('.ignore-reason-select');
+    const reasonText = card.querySelector('.ignore-reason-text');
+
+    const reason = reasonSelect?.value || '';
+    const explanation = reasonText?.value || '';
+    const title = card.querySelector('.ocr-title-input')?.value || '';
+
+    // Log to learning agent
+    try {
+        await fetch('/api/log_ocr_rejection', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                issue_no: number,
+                title: title,
+                reason_code: reason,
+                reason_text: explanation,
+                ocr_content: card.querySelector('.field-display .value-content')?.textContent || ''
+            })
+        });
+    } catch (error) {
+        console.error('Failed to log rejection:', error);
+    }
+
+    // Update UI
+    card.classList.add('card-removed');
+    const statusBadge = card.querySelector('.status-badge');
+    statusBadge.textContent = 'התעלם';
+    statusBadge.classList.remove('bg-light', 'text-dark');
+    statusBadge.classList.add('bg-secondary');
+
+    const reasonArea = card.querySelector('.ignore-reason-area');
+    reasonArea.innerHTML = '<small class="text-muted"><i class="bi bi-check"></i> סיבה נרשמה ללמידה</small>';
+
+    showToast('הסעיף יוותר ללא שינוי - הסיבה נרשמה');
+}
+
+async function addAllOcr() {
+    const cards = document.querySelectorAll('.ocr-card:not(.card-removed):not(.card-kept)');
+    let added = 0;
+    let errors = 0;
+
+    showLoading();
+
+    for (const card of cards) {
+        const number = card.dataset.number;
+        const data = {
+            issue_no: number,
+            title: card.querySelector('.ocr-title-input')?.value || '',
+            decision: card.querySelector('.ocr-decision-select')?.value || '',
+            yes_votes: parseInt(card.querySelector('.ocr-vote-yes')?.value) || 0,
+            no_votes: parseInt(card.querySelector('.ocr-vote-no')?.value) || 0,
+            avoid_votes: parseInt(card.querySelector('.ocr-vote-avoid')?.value) || 0
+        };
+
+        try {
+            const response = await fetch('/api/add_discussion', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (result.success) {
+                card.classList.add('card-kept');
+                const statusBadge = card.querySelector('.status-badge');
+                statusBadge.textContent = 'נוסף';
+                statusBadge.classList.remove('bg-light', 'text-dark');
+                statusBadge.classList.add('bg-success');
+                const addBtn = card.querySelector('.btn-primary');
+                if (addBtn) {
+                    addBtn.disabled = true;
+                    addBtn.innerHTML = '<i class="bi bi-check-lg"></i> נוסף';
+                }
+                added++;
+            } else {
+                errors++;
+            }
+        } catch (error) {
+            errors++;
+        }
+    }
+
+    hideLoading();
+
+    if (errors === 0) {
+        showToast(`נוספו ${added} סעיפים בהצלחה!`);
+    } else {
+        showToast(`נוספו ${added} סעיפים, ${errors} שגיאות`, 'warning');
+    }
+}
+
+async function moveToProcessed() {
+    const btn = document.getElementById('moveToProcessedBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> מעביר...';
+
+    try {
+        const response = await fetch('/api/move_to_processed', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const result = await response.json();
+        if (result.success) {
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> הועבר!';
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-success');
+            showToast(result.message);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-folder-symlink"></i> העבר ל-worked_on';
+            showToast(result.error || 'שגיאה בהעברה', 'danger');
+        }
+    } catch (error) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-folder-symlink"></i> העבר ל-worked_on';
+        showToast('שגיאה בהעברה', 'danger');
+    }
+}
+
+function finishValidation() {
+    showToast('הולידציה הסתיימה בהצלחה!');
+    setTimeout(() => {
+        window.location.href = '/';
+    }, 1500);
+}
+
+// Load admin categories for OCR items
+async function loadAdminCategories() {
+    try {
+        const response = await fetch('/api/get_admin_categories');
+        const categories = await response.json();
+
+        // Populate all dropdowns
+        document.querySelectorAll('.admin-category-select').forEach(select => {
+            // Group by parent category
+            const grouped = {};
+            categories.forEach(cat => {
+                const parent = cat.parent_code || 'ROOT';
+                if (!grouped[parent]) grouped[parent] = [];
+                grouped[parent].push(cat);
+            });
+
+            // Add options (main categories first, then sub-categories)
+            const mainCategories = grouped['ROOT'] || [];
+            mainCategories.forEach(mainCat => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = mainCat.name_he;
+
+                const subCats = grouped[mainCat.code] || [];
+                if (subCats.length > 0) {
+                    subCats.forEach(subCat => {
+                        const option = document.createElement('option');
+                        option.value = subCat.code;
+                        option.textContent = `${subCat.name_he}`;
+                        optgroup.appendChild(option);
+                    });
+                    select.appendChild(optgroup);
+                } else {
+                    const option = document.createElement('option');
+                    option.value = mainCat.code;
+                    option.textContent = mainCat.name_he;
+                    select.appendChild(option);
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Failed to load admin categories:', error);
+    }
+}
+
+// Load categories on page load
+document.addEventListener('DOMContentLoaded', loadAdminCategories);
+</script>
+{% endblock %}

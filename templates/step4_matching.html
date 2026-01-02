@@ -1,0 +1,726 @@
+{% extends "base.html" %}
+
+{% block title %}התאמת סעיפים - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .matching-container {
+        display: flex;
+        gap: 20px;
+        min-height: 500px;
+    }
+    .matching-panel {
+        flex: 1;
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .panel-header {
+        padding: 15px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .panel-db {
+        border-color: #0d6efd;
+    }
+    .panel-db .panel-header {
+        background: linear-gradient(135deg, #cfe2ff, #b6d4fe);
+        color: #084298;
+    }
+    .panel-ocr {
+        border-color: #ffc107;
+    }
+    .panel-ocr .panel-header {
+        background: linear-gradient(135deg, #fff3cd, #ffe69c);
+        color: #664d03;
+    }
+    .panel-body {
+        padding: 10px;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .item-card {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: white;
+    }
+    .item-card:hover {
+        border-color: #6c757d;
+        transform: translateX(-2px);
+    }
+    .item-card.selected {
+        border-color: #198754;
+        background: #d1e7dd;
+        box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.25);
+    }
+    .item-card.matched {
+        border-color: #198754;
+        background: #f8f9fa;
+    }
+    .item-card.matched .match-badge {
+        display: inline-block;
+        background: #198754;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.75em;
+        margin-right: 5px;
+    }
+    .item-card.matched.auto-match {
+        border-style: dashed;
+    }
+    .item-card.matched .unlink-auto {
+        float: left;
+        color: #dc3545;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8em;
+    }
+    .item-card.matched .unlink-auto:hover {
+        background: #f8d7da;
+    }
+    .item-number {
+        display: inline-block;
+        background: #6c757d;
+        color: white;
+        padding: 2px 10px;
+        border-radius: 15px;
+        font-weight: bold;
+        margin-left: 10px;
+        font-size: 0.9em;
+    }
+    .db-item .item-number { background: #0d6efd; }
+    .ocr-item .item-number { background: #ffc107; color: #212529; }
+    .item-title {
+        font-size: 0.95em;
+        margin-top: 8px;
+        color: #495057;
+    }
+    .match-actions {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 10px;
+        padding: 20px 10px;
+    }
+    .match-btn {
+        padding: 15px 20px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+    }
+    .match-btn:hover:not(:disabled) {
+        border-color: #198754;
+        background: #d1e7dd;
+    }
+    .match-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .match-btn i {
+        font-size: 1.5em;
+        display: block;
+        margin-bottom: 5px;
+    }
+    .matched-pairs {
+        margin-top: 30px;
+    }
+    .matched-pair {
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+        background: #d1e7dd;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+    .matched-pair .pair-db {
+        flex: 1;
+        padding-left: 10px;
+        border-left: 3px solid #0d6efd;
+    }
+    .matched-pair .pair-ocr {
+        flex: 1;
+        padding-right: 10px;
+        border-right: 3px solid #ffc107;
+        text-align: left;
+    }
+    .matched-pair .pair-arrow {
+        padding: 0 15px;
+        color: #198754;
+        font-size: 1.2em;
+    }
+    .matched-pair .remove-match {
+        color: #dc3545;
+        cursor: pointer;
+        padding: 5px;
+        margin-right: 10px;
+    }
+    .matched-pair .remove-match:hover {
+        background: #f8d7da;
+        border-radius: 50%;
+    }
+    .unmatched-section {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .unmatched-section h6 {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .phase-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+    .phase-step {
+        padding: 10px 20px;
+        border-radius: 20px;
+        background: #e9ecef;
+        color: #6c757d;
+    }
+    .phase-step.active {
+        background: #0d6efd;
+        color: white;
+    }
+    .phase-step.completed {
+        background: #198754;
+        color: white;
+    }
+    .quick-match-section {
+        background: #e7f5ff;
+        border: 1px solid #0d6efd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-link-45deg"></i>
+                    התאמת סעיפים - שלב 1: קישור
+                </h4>
+                <span class="badge bg-primary">שלב 4א מתוך 5</span>
+            </div>
+            <div class="card-body">
+                <!-- Phase Indicator -->
+                <div class="phase-indicator">
+                    <div class="phase-step active">1. קישור סעיפים</div>
+                    <div class="phase-step">2. השוואת שדות</div>
+                    <div class="phase-step">3. סעיפים לא מותאמים</div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>הוראות:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li>בחר סעיף מבסיס הנתונים (ימין) וסעיף מה-OCR (שמאל)</li>
+                        <li>לחץ "קשר סעיפים" ליצירת התאמה ידנית</li>
+                        <li>סעיפים עם מספר זהה מותאמים אוטומטית</li>
+                        <li>לאחר סיום הקישור, לחץ "המשך להשוואת שדות"</li>
+                    </ol>
+                </div>
+
+                <!-- Quick Match Section -->
+                <div class="quick-match-section">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong><i class="bi bi-magic"></i> התאמה אוטומטית:</strong>
+                            <span id="autoMatchCount">{{ auto_matched|length }}</span> סעיפים הותאמו לפי מספר סעיף
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="showAutoMatched()">
+                            <i class="bi bi-eye"></i> הצג מותאמים
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0">{{ db_unmatched|length }}</h5>
+                            <small>DB לא מותאמים</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0">{{ ocr_unmatched|length }}</h5>
+                            <small>OCR לא מותאמים</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0" id="manualMatchCount">0</h5>
+                            <small>קישורים ידניים</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0" id="totalMatchCount">{{ auto_matched|length }}</h5>
+                            <small>סה"כ מותאמים</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matching Interface -->
+                <div class="matching-container">
+                    <!-- DB Panel (Right) -->
+                    <div class="matching-panel panel-db">
+                        <div class="panel-header">
+                            <i class="bi bi-database"></i>
+                            סעיפים מבסיס הנתונים ({{ db_unmatched|length + auto_matched|length }})
+                        </div>
+                        <div class="panel-body" id="dbPanel">
+                            {% for item in db_unmatched %}
+                            <div class="item-card db-item" data-id="{{ item.id }}" data-number="{{ item.number }}">
+                                <span class="item-number">#{{ item.number }}</span>
+                                <div class="item-title">{{ item.title[:80] }}{% if item.title|length > 80 %}...{% endif %}</div>
+                            </div>
+                            {% endfor %}
+                            {% for pair in auto_matched %}
+                            <div class="item-card db-item matched auto-match" data-id="{{ pair.db.id }}" data-number="{{ pair.db.number }}" data-matched-ocr="{{ pair.ocr.number }}" data-auto="true">
+                                <span class="unlink-auto" onclick="unlinkAutoMatch('{{ pair.db.id }}', '{{ pair.ocr.number }}', event)" title="בטל התאמה אוטומטית">✕</span>
+                                <span class="item-number">#{{ pair.db.number }}</span>
+                                <span class="match-badge">מותאם ל-#{{ pair.ocr.number }}</span>
+                                <div class="item-title">{{ pair.db.title[:80] }}{% if pair.db.title|length > 80 %}...{% endif %}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Match Actions (Center) -->
+                    <div class="match-actions">
+                        <button class="match-btn" id="linkBtn" onclick="linkSelected()" disabled>
+                            <i class="bi bi-link-45deg"></i>
+                            קשר סעיפים
+                        </button>
+                        <button class="match-btn" id="unlinkBtn" onclick="unlinkSelected()" disabled>
+                            <i class="bi bi-x-circle"></i>
+                            בטל קישור
+                        </button>
+                        <hr>
+                        <button class="match-btn" onclick="autoMatchByTitle()">
+                            <i class="bi bi-magic"></i>
+                            התאמה לפי כותרת
+                        </button>
+                    </div>
+
+                    <!-- OCR Panel (Left) -->
+                    <div class="matching-panel panel-ocr">
+                        <div class="panel-header">
+                            <i class="bi bi-file-pdf"></i>
+                            סעיפים מ-OCR ({{ ocr_unmatched|length + auto_matched|length }})
+                        </div>
+                        <div class="panel-body" id="ocrPanel">
+                            {% for item in ocr_unmatched %}
+                            <div class="item-card ocr-item" data-number="{{ item.number }}">
+                                <span class="item-number">#{{ item.number }}</span>
+                                <div class="item-title">{{ item.content[:80] if item.content else 'ללא כותרת' }}{% if item.content and item.content|length > 80 %}...{% endif %}</div>
+                            </div>
+                            {% endfor %}
+                            {% for pair in auto_matched %}
+                            <div class="item-card ocr-item matched auto-match" data-number="{{ pair.ocr.number }}" data-matched-db="{{ pair.db.id }}" data-auto="true">
+                                <span class="unlink-auto" onclick="unlinkAutoMatch('{{ pair.db.id }}', '{{ pair.ocr.number }}', event)" title="בטל התאמה אוטומטית">✕</span>
+                                <span class="item-number">#{{ pair.ocr.number }}</span>
+                                <span class="match-badge">מותאם ל-DB #{{ pair.db.number }}</span>
+                                <div class="item-title">{{ pair.ocr.content[:80] if pair.ocr.content else 'ללא כותרת' }}{% if pair.ocr.content and pair.ocr.content|length > 80 %}...{% endif %}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Matched Pairs -->
+                <div class="matched-pairs" id="matchedPairsSection" style="display: none;">
+                    <h5><i class="bi bi-link-45deg text-success"></i> קישורים ידניים</h5>
+                    <div id="matchedPairsList"></div>
+                </div>
+
+                <!-- Bottom Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/step/3" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור לסגל
+                    </a>
+                    <div>
+                        <button class="btn btn-outline-secondary me-2" onclick="skipToDetails()">
+                            דלג להשוואת שדות
+                        </button>
+                        <button class="btn btn-primary btn-lg" onclick="proceedToComparison()">
+                            המשך להשוואת שדות
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-matched Modal -->
+<div class="modal fade" id="autoMatchedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-magic"></i> סעיפים מותאמים אוטומטית</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>כותרת DB</th>
+                            <th>כותרת OCR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pair in auto_matched %}
+                        <tr>
+                            <td><span class="badge bg-success">{{ pair.db.number }}</span></td>
+                            <td>{{ pair.db.title[:50] }}{% if pair.db.title|length > 50 %}...{% endif %}</td>
+                            <td>{{ pair.ocr.content[:50] if pair.ocr.content else '-' }}{% if pair.ocr.content and pair.ocr.content|length > 50 %}...{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// State management
+let selectedDb = null;
+let selectedOcr = null;
+let manualMatches = [];  // [{db_id, db_number, ocr_number}]
+let autoMatched = {{ auto_matched|tojson|safe }};
+let unlinkedAuto = [];  // Track which auto-matches were unlinked
+
+// Select item handlers
+document.querySelectorAll('.db-item:not(.matched)').forEach(item => {
+    item.addEventListener('click', function() {
+        if (this.classList.contains('matched')) return;
+
+        // Deselect previous
+        document.querySelectorAll('.db-item.selected').forEach(i => i.classList.remove('selected'));
+
+        // Select this
+        this.classList.add('selected');
+        selectedDb = {
+            id: this.dataset.id,
+            number: this.dataset.number,
+            title: this.querySelector('.item-title').textContent
+        };
+        updateLinkButton();
+    });
+});
+
+document.querySelectorAll('.ocr-item:not(.matched)').forEach(item => {
+    item.addEventListener('click', function() {
+        if (this.classList.contains('matched')) return;
+
+        // Deselect previous
+        document.querySelectorAll('.ocr-item.selected').forEach(i => i.classList.remove('selected'));
+
+        // Select this
+        this.classList.add('selected');
+        selectedOcr = {
+            number: this.dataset.number,
+            content: this.querySelector('.item-title').textContent
+        };
+        updateLinkButton();
+    });
+});
+
+function updateLinkButton() {
+    const linkBtn = document.getElementById('linkBtn');
+    linkBtn.disabled = !(selectedDb && selectedOcr);
+}
+
+function linkSelected() {
+    if (!selectedDb || !selectedOcr) return;
+
+    // Add to manual matches
+    manualMatches.push({
+        db_id: selectedDb.id,
+        db_number: selectedDb.number,
+        db_title: selectedDb.title,
+        ocr_number: selectedOcr.number,
+        ocr_content: selectedOcr.content
+    });
+
+    // Mark items as matched
+    const dbItem = document.querySelector(`.db-item[data-id="${selectedDb.id}"]`);
+    const ocrItem = document.querySelector(`.ocr-item[data-number="${selectedOcr.number}"]:not(.matched)`);
+
+    if (dbItem) {
+        dbItem.classList.add('matched');
+        dbItem.classList.remove('selected');
+        dbItem.dataset.matchedOcr = selectedOcr.number;
+    }
+    if (ocrItem) {
+        ocrItem.classList.add('matched');
+        ocrItem.classList.remove('selected');
+        ocrItem.dataset.matchedDb = selectedDb.id;
+    }
+
+    // Update matched pairs display
+    updateMatchedPairsDisplay();
+
+    // Clear selection
+    selectedDb = null;
+    selectedOcr = null;
+    updateLinkButton();
+    updateStats();
+
+    showToast('סעיפים קושרו בהצלחה');
+}
+
+function unlinkSelected() {
+    // TODO: Implement unlink from matched pairs list
+}
+
+function unlinkAutoMatch(dbId, ocrNumber, event) {
+    event.stopPropagation();  // Prevent card selection
+
+    // Find and unlink the items
+    const dbItem = document.querySelector(`.db-item[data-id="${dbId}"]`);
+    const ocrItem = document.querySelector(`.ocr-item[data-number="${ocrNumber}"][data-matched-db="${dbId}"]`);
+
+    if (dbItem) {
+        dbItem.classList.remove('matched', 'auto-match');
+        delete dbItem.dataset.matchedOcr;
+        delete dbItem.dataset.auto;
+        // Remove the match badge and unlink button
+        const badge = dbItem.querySelector('.match-badge');
+        const unlinkBtn = dbItem.querySelector('.unlink-auto');
+        if (badge) badge.remove();
+        if (unlinkBtn) unlinkBtn.remove();
+        // Re-enable click handler
+        enableItemSelection(dbItem, 'db');
+    }
+
+    if (ocrItem) {
+        ocrItem.classList.remove('matched', 'auto-match');
+        delete ocrItem.dataset.matchedDb;
+        delete ocrItem.dataset.auto;
+        // Remove the match badge and unlink button
+        const badge = ocrItem.querySelector('.match-badge');
+        const unlinkBtn = ocrItem.querySelector('.unlink-auto');
+        if (badge) badge.remove();
+        if (unlinkBtn) unlinkBtn.remove();
+        // Re-enable click handler
+        enableItemSelection(ocrItem, 'ocr');
+    }
+
+    // Track unlinked auto-matches
+    unlinkedAuto.push({ db_id: dbId, ocr_number: ocrNumber });
+
+    // Update autoMatched array to exclude unlinked
+    autoMatched = autoMatched.filter(m => !(String(m.db.id) === String(dbId) && String(m.ocr.number) === String(ocrNumber)));
+
+    updateStats();
+    showToast('ההתאמה האוטומטית בוטלה - ניתן לקשר ידנית');
+}
+
+function enableItemSelection(item, type) {
+    item.addEventListener('click', function() {
+        if (this.classList.contains('matched')) return;
+
+        // Deselect previous
+        document.querySelectorAll(`.${type}-item.selected`).forEach(i => i.classList.remove('selected'));
+
+        // Select this
+        this.classList.add('selected');
+
+        if (type === 'db') {
+            selectedDb = {
+                id: this.dataset.id,
+                number: this.dataset.number,
+                title: this.querySelector('.item-title').textContent
+            };
+        } else {
+            selectedOcr = {
+                number: this.dataset.number,
+                content: this.querySelector('.item-title').textContent
+            };
+        }
+        updateLinkButton();
+    });
+}
+
+function updateMatchedPairsDisplay() {
+    const section = document.getElementById('matchedPairsSection');
+    const list = document.getElementById('matchedPairsList');
+
+    if (manualMatches.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    list.innerHTML = manualMatches.map((match, idx) => `
+        <div class="matched-pair">
+            <span class="remove-match" onclick="removeMatch(${idx})" title="בטל קישור">
+                <i class="bi bi-x-circle"></i>
+            </span>
+            <div class="pair-db">
+                <strong>#${match.db_number}</strong>
+                ${match.db_title}
+            </div>
+            <div class="pair-arrow">↔</div>
+            <div class="pair-ocr">
+                <strong>#${match.ocr_number}</strong>
+                ${match.ocr_content}
+            </div>
+        </div>
+    `).join('');
+}
+
+function removeMatch(idx) {
+    const match = manualMatches[idx];
+
+    // Unmark items
+    const dbItem = document.querySelector(`.db-item[data-id="${match.db_id}"]`);
+    const ocrItem = document.querySelector(`.ocr-item[data-number="${match.ocr_number}"][data-matched-db="${match.db_id}"]`);
+
+    if (dbItem) {
+        dbItem.classList.remove('matched');
+        delete dbItem.dataset.matchedOcr;
+    }
+    if (ocrItem) {
+        ocrItem.classList.remove('matched');
+        delete ocrItem.dataset.matchedDb;
+    }
+
+    // Remove from array
+    manualMatches.splice(idx, 1);
+    updateMatchedPairsDisplay();
+    updateStats();
+
+    showToast('הקישור בוטל');
+}
+
+function updateStats() {
+    document.getElementById('manualMatchCount').textContent = manualMatches.length;
+    document.getElementById('totalMatchCount').textContent = autoMatched.length + manualMatches.length;
+}
+
+function showAutoMatched() {
+    const modal = new bootstrap.Modal(document.getElementById('autoMatchedModal'));
+    modal.show();
+}
+
+function autoMatchByTitle() {
+    // Find unmatched items and try to match by similar titles
+    const unmatchedDb = document.querySelectorAll('.db-item:not(.matched)');
+    const unmatchedOcr = document.querySelectorAll('.ocr-item:not(.matched)');
+
+    let matched = 0;
+    unmatchedDb.forEach(dbItem => {
+        const dbTitle = dbItem.querySelector('.item-title').textContent.toLowerCase();
+
+        unmatchedOcr.forEach(ocrItem => {
+            if (ocrItem.classList.contains('matched')) return;
+
+            const ocrTitle = ocrItem.querySelector('.item-title').textContent.toLowerCase();
+
+            // Simple similarity check - at least 50% of words match
+            const dbWords = new Set(dbTitle.split(/\s+/).filter(w => w.length > 2));
+            const ocrWords = new Set(ocrTitle.split(/\s+/).filter(w => w.length > 2));
+
+            let commonWords = 0;
+            dbWords.forEach(w => {
+                if (ocrWords.has(w)) commonWords++;
+            });
+
+            const similarity = commonWords / Math.max(dbWords.size, 1);
+
+            if (similarity >= 0.5) {
+                // Match found
+                manualMatches.push({
+                    db_id: dbItem.dataset.id,
+                    db_number: dbItem.dataset.number,
+                    db_title: dbItem.querySelector('.item-title').textContent,
+                    ocr_number: ocrItem.dataset.number,
+                    ocr_content: ocrItem.querySelector('.item-title').textContent
+                });
+
+                dbItem.classList.add('matched');
+                dbItem.dataset.matchedOcr = ocrItem.dataset.number;
+                ocrItem.classList.add('matched');
+                ocrItem.dataset.matchedDb = dbItem.dataset.id;
+
+                matched++;
+            }
+        });
+    });
+
+    updateMatchedPairsDisplay();
+    updateStats();
+
+    if (matched > 0) {
+        showToast(`נמצאו ${matched} התאמות נוספות לפי כותרת`);
+    } else {
+        showToast('לא נמצאו התאמות נוספות', 'warning');
+    }
+}
+
+function skipToDetails() {
+    proceedToComparison();
+}
+
+async function proceedToComparison() {
+    showLoading();
+
+    try {
+        // Save manual matches and unlinked auto-matches to server
+        const response = await fetch('/api/save_discussion_matches', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                manual_matches: manualMatches,
+                unlinked_auto: unlinkedAuto  // Send unlinked auto-matches
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            window.location.href = '/step/4b';
+        } else {
+            hideLoading();
+            showToast(result.error || 'שגיאה בשמירה', 'danger');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('שגיאה בשמירה', 'danger');
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateStats();
+});
+</script>
+{% endblock %}

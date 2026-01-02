@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}העלאת פרוטוקול - ולידציה{% endblock %}
+
+{% block step_indicator %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-upload"></i>
+                    שלב 1: העלאת קובץ PDF
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">בחר קובץ פרוטוקול (PDF)</label>
+                        <input type="file" class="form-control form-control-lg" id="pdfFile" name="pdf_file" accept=".pdf" required>
+                        <div class="form-text">גודל מקסימלי: 50MB</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-cloud-upload"></i>
+                        העלה וחלץ נתונים
+                    </button>
+                </form>
+
+                <div id="extractionResult" class="mt-4" style="display: none;">
+                    <div class="alert alert-success">
+                        <h5><i class="bi bi-check-circle"></i> הקובץ עובד בהצלחה!</h5>
+                        <p class="mb-1"><strong>קובץ:</strong> <span id="fileName"></span></p>
+                        <p class="mb-1"><strong>מספר ישיבה:</strong> <span id="meetingNo"></span></p>
+                        <p class="mb-1"><strong>נוכחים:</strong> <span id="attendCount"></span></p>
+                        <p class="mb-1"><strong>סגל:</strong> <span id="staffCount"></span></p>
+                        <p class="mb-0"><strong>דיונים:</strong> <span id="discCount"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="meetingSelectionCard" class="card" style="display: none;">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-calendar-check"></i>
+                    שלב 2: התאמה לישיבה בבסיס הנתונים
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">חפש ישיבה לפי מספר או תאריך</label>
+                    <input type="text" class="form-control" id="meetingSearch" placeholder="הקלד לחיפוש...">
+                </div>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover" id="meetingsTable">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>מספר ישיבה</th>
+                                <th>תאריך</th>
+                                <th>סוג</th>
+                                <th>פעולה</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for meeting in meetings %}
+                            <tr data-search="{{ meeting.meeting_no }} {{ meeting.date }} {{ meeting.type }}">
+                                <td>{{ meeting.meeting_no }}</td>
+                                <td>{{ meeting.date }}</td>
+                                <td>{{ meeting.type }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary select-meeting" data-id="{{ meeting.id }}">
+                                        <i class="bi bi-check-lg"></i> בחר
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="comparisonPreview" class="card" style="display: none;">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-clipboard-check"></i>
+                    תצוגה מקדימה
+                </h4>
+            </div>
+            <div class="card-body">
+                <div id="comparisonContent"></div>
+                <div class="mt-4 text-center">
+                    <a href="/step/1" class="btn btn-success btn-lg">
+                        <i class="bi bi-arrow-left"></i>
+                        התחל ולידציה
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    showLoading('מעבד את קובץ ה-PDF...', true);
+
+    // Simulate progress for OCR (which can take time)
+    let progressPercent = 0;
+    const progressSteps = [
+        { pct: 10, text: 'מעלה את הקובץ...' },
+        { pct: 25, text: 'ממיר PDF לתמונות...' },
+        { pct: 50, text: 'מריץ OCR (זיהוי תווים)...' },
+        { pct: 75, text: 'מחלץ נתונים מהטקסט...' },
+        { pct: 90, text: 'מסיים עיבוד...' }
+    ];
+    let stepIndex = 0;
+
+    const progressInterval = setInterval(() => {
+        if (stepIndex < progressSteps.length) {
+            updateProgress(progressSteps[stepIndex].pct, progressSteps[stepIndex].text);
+            stepIndex++;
+        }
+    }, 2000);
+
+    const formData = new FormData();
+    formData.append('pdf_file', document.getElementById('pdfFile').files[0]);
+
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        clearInterval(progressInterval);
+        updateProgress(100, 'הושלם!');
+
+        if (data.success) {
+            document.getElementById('fileName').textContent = data.filename;
+            document.getElementById('meetingNo').textContent = data.meeting_info.meeting_no || 'לא זוהה';
+            document.getElementById('attendCount').textContent = data.attendances_count;
+            document.getElementById('staffCount').textContent = data.staff_count;
+            document.getElementById('discCount').textContent = data.discussions_count;
+
+            document.getElementById('extractionResult').style.display = 'block';
+            document.getElementById('meetingSelectionCard').style.display = 'block';
+
+            // Try to auto-select matching meeting
+            const meetingNo = data.meeting_info.meeting_no;
+            if (meetingNo) {
+                const rows = document.querySelectorAll('#meetingsTable tbody tr');
+                rows.forEach(row => {
+                    if (row.cells[0].textContent.includes(meetingNo)) {
+                        row.classList.add('table-warning');
+                    }
+                });
+            }
+        } else {
+            showToast(data.error, 'danger');
+        }
+    } catch (error) {
+        clearInterval(progressInterval);
+        showToast('שגיאה בהעלאת הקובץ', 'danger');
+    }
+    hideLoading();
+});
+
+// Meeting search filter
+document.getElementById('meetingSearch').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#meetingsTable tbody tr');
+    rows.forEach(row => {
+        const searchData = row.getAttribute('data-search').toLowerCase();
+        row.style.display = searchData.includes(searchTerm) ? '' : 'none';
+    });
+});
+
+// Meeting selection
+document.querySelectorAll('.select-meeting').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        showLoading();
+        const meetingId = this.getAttribute('data-id');
+
+        try {
+            const response = await fetch('/match_meeting', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({meeting_id: meetingId})
+            });
+            const data = await response.json();
+
+            console.log('match_meeting response:', data);
+            if (data.success) {
+                // Show comparison preview
+                const meeting = data.meeting;
+                const comparison = data.comparison;
+
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="bi bi-database"></i> נתוני בסיס נתונים</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>מספר ישיבה:</strong> ${meeting.meeting_no}</li>
+                                <li><strong>תאריך:</strong> ${meeting.date}</li>
+                                <li><strong>נוכחים:</strong> ${meeting.present.length}</li>
+                                <li><strong>נעדרים:</strong> ${meeting.absent.length}</li>
+                                <li><strong>סגל:</strong> ${meeting.staff.length}</li>
+                                <li><strong>דיונים:</strong> ${meeting.discussions.length}</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="bi bi-file-pdf"></i> נתוני OCR</h6>
+                            <p class="text-muted">הנתונים יושוו בשלבים הבאים</p>
+                        </div>
+                    </div>
+                `;
+
+                if (comparison.matches && comparison.matches.length > 0) {
+                    html += '<div class="alert alert-success mt-3"><strong>התאמות:</strong><br>' + comparison.matches.join('<br>') + '</div>';
+                }
+                if (comparison.discrepancies && comparison.discrepancies.length > 0) {
+                    html += '<div class="alert alert-warning mt-3">';
+                    html += '<strong><i class="bi bi-exclamation-triangle"></i> פערים (אזהרה בלבד - לא מונע המשך):</strong><br>';
+                    html += comparison.discrepancies.join('<br>');
+                    html += '<hr><small class="text-muted">פערים אלו ייבדקו בשלבי הולידציה הבאים. ניתן להמשיך.</small>';
+                    html += '</div>';
+                }
+
+                document.getElementById('comparisonContent').innerHTML = html;
+                document.getElementById('comparisonPreview').style.display = 'block';
+
+                // Scroll to preview
+                document.getElementById('comparisonPreview').scrollIntoView({behavior: 'smooth'});
+            } else {
+                showToast(data.error, 'danger');
+            }
+        } catch (error) {
+            showToast('שגיאה בבחירת הישיבה', 'danger');
+        }
+        hideLoading();
+    });
+});
+</script>
+{% endblock %}

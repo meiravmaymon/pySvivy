@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}נוכחות - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .person-card {
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        transition: all 0.2s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .person-card.matched {
+        border-color: #198754;
+        background: #d1e7dd;
+    }
+    .person-card.ocr-only {
+        border-color: #fd7e14;
+        background: #fff3cd;
+    }
+    .person-card.db-only {
+        border-color: #0d6efd;
+        background: #cfe2ff;
+    }
+    .action-buttons {
+        display: flex;
+        gap: 5px;
+    }
+    .section-header {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+    .legend {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 2px solid;
+    }
+    .unmatched-section {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 15px;
+    }
+    .matched-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 15px;
+        border-radius: 25px;
+        margin: 4px;
+        font-size: 0.95em;
+        background: #d1e7dd;
+        border: 2px solid #198754;
+    }
+    .matched-badge .names {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .matched-badge .ocr-name {
+        font-size: 0.8em;
+        color: #856404;
+    }
+    .matched-badge .db-name {
+        font-weight: bold;
+    }
+    .empty-message {
+        color: #6c757d;
+        font-style: italic;
+        padding: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-people"></i>
+                    נוכחות - השוואה ועדכון
+                </h4>
+                <span class="badge bg-primary">שלב 2 מתוך 4</span>
+            </div>
+            <div class="card-body">
+                <!-- Legend -->
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #d1e7dd; border-color: #198754;"></div>
+                        <span>תואם - נמצא בשניהם</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #fff3cd; border-color: #fd7e14;"></div>
+                        <span>רק ב-OCR</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #cfe2ff; border-color: #0d6efd;"></div>
+                        <span>רק בבסיס נתונים</span>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>הוראות:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><strong>תואם</strong> - השם מופיע בשני המקורות, לא נדרשת פעולה</li>
+                        <li><strong>רק ב-OCR</strong> - השם זוהה בקובץ אך לא נמצא בבסיס הנתונים. לחץ 🔗 להתאמה או ✗ להתעלמות</li>
+                        <li><strong>רק בבסיס נתונים</strong> - השם קיים בבסיס הנתונים אך לא זוהה ב-OCR. לחץ על הכפתור לשינוי הסטטוס</li>
+                    </ul>
+                </div>
+
+                <!-- PRESENT Section -->
+                <div class="section-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle text-success"></i>
+                        נוכחים
+                        <span class="badge bg-success ms-2">OCR: {{ ocr_present_count }}</span>
+                        <span class="badge bg-primary ms-1">DB: {{ db_present_count }}</span>
+                        <span class="badge bg-info ms-1">תואמים: {{ matched_present|length }}</span>
+                    </h5>
+                </div>
+
+                <div class="row mb-4">
+                    <!-- Matched Present -->
+                    <div class="col-12">
+                        <h6 class="text-success"><i class="bi bi-check-all"></i> תואמים ({{ matched_present|length }})</h6>
+                        <div id="matchedPresent" class="d-flex flex-wrap">
+                            {% for match in matched_present %}
+                            <div class="matched-badge">
+                                <i class="bi bi-check text-success me-2"></i>
+                                <div class="names">
+                                    {% if match.ocr_name != match.db_name %}
+                                    <span class="ocr-name">{{ match.ocr_name }}</span>
+                                    {% endif %}
+                                    <span class="db-name">{{ match.db_name }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="empty-message">לא נמצאו התאמות</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <!-- OCR Only Present -->
+                    <div class="col-md-6">
+                        <div class="unmatched-section">
+                            <h6 class="text-warning"><i class="bi bi-file-pdf"></i> רק ב-OCR ({{ ocr_only_present|length }})</h6>
+                            <p class="small text-muted">שמות שזוהו בקובץ אך לא נמצאו בבסיס הנתונים</p>
+                            <div id="ocrOnlyPresent">
+                                {% for ocr_item in ocr_only_present %}
+                                <div class="person-card ocr-only" data-name="{{ ocr_item.name }}">
+                                    <span>{{ ocr_item.name }}</span>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-success match-btn"
+                                                data-name="{{ ocr_item.name }}"
+                                                data-type="present"
+                                                title="התאם לאדם קיים">
+                                            <i class="bi bi-link"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary ignore-btn" title="התעלם">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="empty-message">אין שמות שלא נמצאו</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DB Only Present -->
+                    <div class="col-md-6">
+                        <div class="unmatched-section">
+                            <h6 class="text-primary"><i class="bi bi-database"></i> רק בבסיס נתונים ({{ db_only_present|length }})</h6>
+                            <p class="small text-muted">אנשים רשומים כנוכחים בבסיס הנתונים אך לא זוהו ב-OCR</p>
+                            <div id="dbOnlyPresent">
+                                {% for db_item in db_only_present %}
+                                <div class="person-card db-only" data-id="{{ db_item.id }}">
+                                    <span>{{ db_item.name }}</span>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-danger set-absent-btn"
+                                                data-id="{{ db_item.id }}"
+                                                title="סמן כנעדר">
+                                            <i class="bi bi-x-circle"></i> סמן נעדר
+                                        </button>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="empty-message">אין אנשים שלא זוהו</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ABSENT Section -->
+                <div class="section-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-x-circle text-danger"></i>
+                        נעדרים
+                        <span class="badge bg-warning text-dark ms-2">OCR: {{ ocr_absent_count }}</span>
+                        <span class="badge bg-secondary ms-1">DB: {{ db_absent_count }}</span>
+                        <span class="badge bg-info ms-1">תואמים: {{ matched_absent|length }}</span>
+                    </h5>
+                </div>
+
+                <div class="row mb-4">
+                    <!-- Matched Absent -->
+                    <div class="col-12">
+                        <h6 class="text-success"><i class="bi bi-check-all"></i> תואמים ({{ matched_absent|length }})</h6>
+                        <div id="matchedAbsent" class="d-flex flex-wrap">
+                            {% for match in matched_absent %}
+                            <div class="matched-badge" style="background: #f8f9fa; border-color: #6c757d;">
+                                <i class="bi bi-check text-secondary me-2"></i>
+                                <div class="names">
+                                    {% if match.ocr_name != match.db_name %}
+                                    <span class="ocr-name">{{ match.ocr_name }}</span>
+                                    {% endif %}
+                                    <span class="db-name">{{ match.db_name }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="empty-message">לא נמצאו התאמות</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <!-- OCR Only Absent -->
+                    <div class="col-md-6">
+                        <div class="unmatched-section">
+                            <h6 class="text-warning"><i class="bi bi-file-pdf"></i> רק ב-OCR ({{ ocr_only_absent|length }})</h6>
+                            <p class="small text-muted">שמות שזוהו כנעדרים בקובץ</p>
+                            <div id="ocrOnlyAbsent">
+                                {% for ocr_item in ocr_only_absent %}
+                                <div class="person-card ocr-only" data-name="{{ ocr_item.name }}">
+                                    <span>{{ ocr_item.name }}</span>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-success match-btn"
+                                                data-name="{{ ocr_item.name }}"
+                                                data-type="absent"
+                                                title="התאם לאדם קיים">
+                                            <i class="bi bi-link"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary ignore-btn" title="התעלם">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="empty-message">אין שמות שלא נמצאו</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DB Only Absent -->
+                    <div class="col-md-6">
+                        <div class="unmatched-section">
+                            <h6 class="text-primary"><i class="bi bi-database"></i> רק בבסיס נתונים ({{ db_only_absent|length }})</h6>
+                            <p class="small text-muted">אנשים רשומים כנעדרים בבסיס הנתונים אך לא זוהו ב-OCR</p>
+                            <div id="dbOnlyAbsent">
+                                {% for db_item in db_only_absent %}
+                                <div class="person-card db-only" data-id="{{ db_item.id }}">
+                                    <span>{{ db_item.name }}</span>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-secondary confirm-absent-btn"
+                                                data-id="{{ db_item.id }}"
+                                                title="אשר כנעדר - OCR לא זיהה">
+                                            <i class="bi bi-check"></i> אשר נעדר
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success set-present-btn"
+                                                data-id="{{ db_item.id }}"
+                                                title="סמן כנוכח">
+                                            <i class="bi bi-check-circle"></i> סמן נוכח
+                                        </button>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="empty-message">אין אנשים שלא זוהו</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="card bg-light mt-4">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart"></i> סיכום
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-3">
+                                <strong>נוכחים (OCR)</strong><br>
+                                <span class="fs-4 text-warning">{{ ocr_present_count }}</span>
+                            </div>
+                            <div class="col-3">
+                                <strong>נוכחים (DB)</strong><br>
+                                <span class="fs-4 text-primary">{{ db_present_count }}</span>
+                            </div>
+                            <div class="col-3">
+                                <strong>נעדרים (OCR)</strong><br>
+                                <span class="fs-4 text-warning">{{ ocr_absent_count }}</span>
+                            </div>
+                            <div class="col-3">
+                                <strong>נעדרים (DB)</strong><br>
+                                <span class="fs-4 text-secondary">{{ db_absent_count }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/step/1" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור לפרטי ישיבה
+                    </a>
+                    <a href="/step/3" class="btn btn-primary btn-lg">
+                        המשך לסגל
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Match Person Modal -->
+<div class="modal fade" id="matchPersonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">התאמת שם לאדם קיים</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>שם מה-OCR: <strong id="ocrNameToMatch"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label">בחר אדם מבסיס הנתונים:</label>
+                    <select class="form-select" id="personSelect">
+                        <option value="">-- בחר --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+                <button type="button" class="btn btn-primary" id="confirmMatchBtn">אשר התאמה</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentMatchElement = null;
+let currentMatchType = null;
+let allPersons = [];
+
+// Load all persons on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const response = await fetch('/api/get_persons');
+        allPersons = await response.json();
+        const select = document.getElementById('personSelect');
+        allPersons.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load persons:', error);
+    }
+
+    // Attach event listeners using delegation for better handling of special chars
+    document.querySelectorAll('.set-present-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            setPresent(id, this);
+        });
+    });
+
+    document.querySelectorAll('.set-absent-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            setAbsent(id, this);
+        });
+    });
+
+    document.querySelectorAll('.match-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const name = this.dataset.name;
+            const type = this.dataset.type;
+            matchToPerson(this, name, type);
+        });
+    });
+
+    document.querySelectorAll('.ignore-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            ignoreOcrName(this);
+        });
+    });
+
+    document.querySelectorAll('.confirm-absent-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            confirmAbsent(this);
+        });
+    });
+
+    document.getElementById('confirmMatchBtn').addEventListener('click', confirmMatch);
+});
+
+// Set as present
+async function setPresent(id, btn) {
+    try {
+        const response = await fetch('/api/update_attendance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({attendance_id: id, action: 'set_present'})
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('עודכן לנוכח');
+            btn.closest('.person-card').remove();
+        } else {
+            showToast(data.error, 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בעדכון', 'danger');
+    }
+}
+
+// Set as absent
+async function setAbsent(id, btn) {
+    try {
+        const response = await fetch('/api/update_attendance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({attendance_id: id, action: 'set_absent'})
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('עודכן לנעדר');
+            btn.closest('.person-card').remove();
+        } else {
+            showToast(data.error, 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בעדכון', 'danger');
+    }
+}
+
+// Ignore OCR name
+function ignoreOcrName(btn) {
+    btn.closest('.person-card').remove();
+    showToast('השם הוסר מהרשימה');
+}
+
+// Confirm absent - keep as is in DB, OCR missed this person
+function confirmAbsent(btn) {
+    const card = btn.closest('.person-card');
+    const name = card.querySelector('span').textContent;
+
+    // Mark the card as confirmed
+    card.classList.remove('db-only');
+    card.classList.add('matched');
+    card.style.borderColor = '#198754';
+    card.style.background = '#d1e7dd';
+
+    // Replace buttons with confirmed indicator
+    card.querySelector('.action-buttons').innerHTML = `
+        <span class="text-success"><i class="bi bi-check-lg"></i> אושר כנעדר</span>
+    `;
+
+    showToast(`${name} אושר כנעדר`);
+}
+
+// Match to person
+function matchToPerson(btn, ocrName, type) {
+    currentMatchElement = btn.closest('.person-card');
+    currentMatchType = type;
+    document.getElementById('ocrNameToMatch').textContent = ocrName;
+    new bootstrap.Modal(document.getElementById('matchPersonModal')).show();
+}
+
+// Confirm match
+async function confirmMatch() {
+    const personId = document.getElementById('personSelect').value;
+    if (!personId) {
+        showToast('יש לבחור אדם', 'warning');
+        return;
+    }
+
+    // Here we would update the attendance record
+    // For now, just remove the card and show success
+    currentMatchElement.remove();
+    bootstrap.Modal.getInstance(document.getElementById('matchPersonModal')).hide();
+    showToast('ההתאמה נשמרה');
+}
+</script>
+{% endblock %}

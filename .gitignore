@@ -80,8 +80,64 @@ tmp/
 Thumbs.db
 .DS_Store
 
-# Project specific
+# Project specific - data folders
 stitch_pages/
 avatarTry/
 archive/
 firstTest/
+old_databases/
+old_logs/
+ocr_results/
+protocols_pdf/
+tessdata/
+yehudCsv/
+data/
+webapp/
+backups/
+logs/
+static/
+
+# Old files
+php_unserialize.py
+create_comparison_md.py
+
+# Tesseract
+tesseract-installer.exe
+download_tesseract.ps1
+install_tesseract.ps1
+tools/tesseract-installer.exe
+tools/download_tesseract.ps1
+tools/install_tesseract.ps1
+
+# projAgents (development notes)
+projAgents/
+
+# Debug and temp files
+debug_*.txt
+raw_*.txt
+temp_*.txt
+test_reverse.txt
+*_test.json
+staff_test*.json
+expert_opinions*.txt
+nul
+
+# Log files (JSON)
+*_log.json
+ocr_learning_data.json
+ocr_corrections_log.json
+ocr_changes_log.json
+custom_values_log.json
+
+# Uploads
+uploads/
+
+# Reports (generated)
+reports/
+
+# Claude settings (local)
+.claude/settings.local.json
+
+# Windows
+nul
+Thumbs.db

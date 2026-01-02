@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.eggs
+*.egg
+.pytest_cache
+.coverage
+htmlcov
+
+# Virtual environments
+venv
+.venv
+env
+.env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs (will be mounted as volume)
+logs/*.log
+
+# Test files
+tests/
+*.test.py
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Archives
+archive/
+
+# Temporary files
+*.tmp
+*.temp
+nul
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+backups/

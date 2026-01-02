@@ -60,7 +60,7 @@ def clean_html(html_text):
 
 
 def parse_date(date_value):
-    """Parse various date formats to datetime object"""
+    """Parse various date formats to datetime object with Israeli format preference"""
     if pd.isna(date_value):
         return None
 
@@ -68,13 +68,43 @@ def parse_date(date_value):
         return date_value
 
     if isinstance(date_value, str):
+        date_value = date_value.strip()
+
         # Try different date formats
+        # NOTE: Israeli format (DD/MM/YYYY) should be tried BEFORE American format (MM/DD/YYYY)
         formats = [
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d',
-            '%m/%d/%Y',
-            '%d/%m/%Y'
+            '%Y-%m-%d %H:%M:%S',  # ISO with time
+            '%Y-%m-%d',           # ISO without time
+            '%d/%m/%Y',           # Israeli/European format (DAY/MONTH/YEAR) - TRY FIRST
+            '%m/%d/%Y'            # American format (MONTH/DAY/YEAR) - TRY SECOND
         ]
+
+        # Smart detection: if format is DD/MM/YYYY, check if day > 12
+        # This helps disambiguate between Israeli and American formats
+        if '/' in date_value:
+            parts = date_value.split('/')
+            if len(parts) == 3:
+                try:
+                    first_num = int(parts[0])
+                    second_num = int(parts[1])
+
+                    # If first number > 12, it MUST be DD/MM/YYYY
+                    if first_num > 12:
+                        try:
+                            return datetime.strptime(date_value, '%d/%m/%Y')
+                        except ValueError:
+                            pass
+
+                    # If second number > 12, it MUST be MM/DD/YYYY
+                    elif second_num > 12:
+                        try:
+                            return datetime.strptime(date_value, '%m/%d/%Y')
+                        except ValueError:
+                            pass
+                except (ValueError, IndexError):
+                    pass
+
+        # Try all formats in order
         for fmt in formats:
             try:
                 return datetime.strptime(date_value, fmt)

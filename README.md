@@ -1,240 +1,196 @@
-# Svivy - מערכת ניהול עירונית 🏛️
+# Svivy - מערכת ניהול עירונית
 
 מערכת לניהול ומעקב אחר החלטות, ישיבות וחברי מועצה ברשויות מקומיות בישראל.
 
-## 📋 תיאור הפרויקט
+## תיאור הפרויקט
 
 Svivy היא מערכת ניהול מקיפה לרשויות מקומיות המאפשרת:
 - מעקב אחר חברי מועצה, תפקידים וסיעות
 - ניהול ישיבות ועדות ומליאה
 - תיעוד החלטות והצבעות
+- חילוץ אוטומטי של נתונים מפרוטוקולים (OCR)
 - ניתוח נתונים סטטיסטיים
-- ממשק משתמש בעברית עם תמיכה מלאה ב-RTL
 
-**נתונים נוכחיים במערכת:**
-- 25 חברי מועצה
-- 21 ועדות ומועצות
-- 137 ישיבות
-- 790 החלטות
-- 11,506 הצבעות
+## נתונים במערכת
 
-## 🚀 התקנה מהירה
+| סוג | כמות |
+|-----|------|
+| חברי מועצה וסגל | 31 |
+| ועדות ומועצות | 21 |
+| ישיבות | 136 |
+| דיונים | 790 |
+| הצבעות | 11,499 |
+| קדנציות | 3 |
+
+## מערכת OCR לפרוטוקולים
+
+המערכת כוללת מנוע OCR מתקדם לחילוץ אוטומטי של נתונים מפרוטוקולים בעברית:
+
+### תכונות עיקריות
+- **זיהוי טקסט עברי** - Tesseract 5.3.3
+- **חילוץ החלטות** - שימוש ב-LLM (Ollama/Gemma3)
+- **התאמת שמות** - Fuzzy matching עם SequenceMatcher
+- **אימות אינטראקטיבי** - מחברת Jupyter לאימות מול DB
+
+### שימוש ב-OCR
+
+```python
+# בתוך Jupyter Notebook
+from ocr_validation_module import ValidationSession
+
+session = ValidationSession()
+session.select_pdf()          # בחירת קובץ
+session.run_ocr()             # הרצת OCR
+session.search_meetings()     # חיפוש ישיבה מתאימה
+session.load_meeting(82)      # טעינת ישיבה
+session.apply_changes()       # שמירת שינויים
+```
+
+## התקנה
 
 ### דרישות מקדימות
-- Python 3.9 ומעלה
-- pip (מנהל חבילות Python)
+- Python 3.9+
+- Tesseract OCR 5.3.3+ עם תמיכה בעברית
+- Ollama (אופציונלי, לתכונות LLM)
 
 ### שלבי התקנה
 
-1. **שכפול הפרויקט**
-   ```bash
-   cd c:\SvivyPro\sviviy\pySvivy
-   ```
+```bash
+# 1. יצירת סביבה וירטואלית
+python -m venv venv
+venv\Scripts\activate  # Windows
 
-2. **יצירת סביבה וירטואלית**
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate  # Windows
-   # source venv/bin/activate  # Linux/Mac
-   ```
+# 2. התקנת תלויות
+pip install -r requirements.txt
 
-3. **התקנת תלויות**
-   ```bash
-   pip install -r requirements.txt
-   ```
+# 3. התקנת Tesseract (Windows)
+# הורד מ: https://github.com/UB-Mannheim/tesseract/wiki
+# התקן ל: C:\Program Files\Tesseract-OCR\
 
-4. **אתחול מסד הנתונים** (אם צריך ליצור מחדש)
-   ```bash
-   python database.py
-   ```
+# 4. התקנת Ollama (אופציונלי)
+# הורד מ: https://ollama.com
+ollama pull gemma3:1b
 
-5. **ייבוא נתונים** (אופציונלי)
-   ```bash
-   python import_data.py
-   ```
+# 5. אתחול מסד הנתונים
+python database.py
+```
 
-6. **הרצת שרת הפיתוח**
-   ```bash
-   cd webapp
-   python app.py
-   ```
-
-7. **פתיחת הדפדפן**
-   ```
-   http://localhost:5000
-   ```
-
-## 📁 מבנה הפרויקט
+## מבנה הפרויקט
 
 ```
 pySvivy/
-├── models.py              # מודלים של מסד הנתונים (10 טבלאות)
-├── database.py            # חיבור למסד נתונים
-├── import_data.py         # ייבוא נתונים מ-Excel
-├── php_unserialize.py     # פענוח נתונים ישנים
-├── test_filters.py        # בדיקות מערכת הפילטרים
-├── svivyNew.db            # מסד נתונים ראשי
-├── requirements.txt       # תלויות Python
+├── config.py                  # קונפיגורציה מרכזית
+├── models.py                  # מודלים SQLAlchemy (12 טבלאות)
+├── database.py                # ניהול חיבור לDB
+├── import_data.py             # ייבוא מ-Excel
+├── ocr_protocol.py            # מנוע OCR
+├── ocr_validation_module.py   # אימות פרוטוקולים
+├── ocr_web_app.py             # אפליקציית Flask לאימות OCR
+├── llm_helper.py              # עזר LLM
+├── ocr_learning_agent.py      # סוכן למידה מתיקוני OCR
+├── db_action_agent.py         # חילוץ פעולות DB מדיונים
+├── requirements.txt           # תלויות Python
 │
-├── webapp/                # אפליקציית Flask
-│   ├── app.py            # שרת Flask ו-API
-│   ├── templates/        # תבניות HTML
-│   │   ├── index.html           # דשבורד ראשי
-│   │   ├── persons.html         # רשימת חברי מועצה
-│   │   ├── person_detail.html   # פרטי חבר מועצה
-│   │   ├── discussions.html     # רשימת החלטות
-│   │   ├── discussion_detail.html
-│   │   └── boards.html          # ועדות ומועצות
-│   └── static/
-│       ├── js/           # JavaScript
-│       │   ├── global-filter.js      # ניהול פילטרים
-│       │   ├── global-filter-ui.js
-│       │   ├── category-icons.js
-│       │   ├── empty-state.js
-│       │   └── person-avatars.js
-│       └── images/
+├── ocr/                       # מודולי OCR
+│   ├── text_utils.py          # עיבוד טקסט עברי
+│   ├── date_extractor.py      # חילוץ תאריכים
+│   ├── budget_extractor.py    # חילוץ תקציבים
+│   ├── vote_extractor.py      # חילוץ הצבעות
+│   └── pdf_processor.py       # המרת PDF לטקסט
 │
-├── yehudCsv/             # קבצי Excel לייבוא
-├── tests/                # בדיקות
-├── backups/              # גיבויים
-└── archive/              # קוד היסטורי (firstTest לשעבר)
+├── agents/                    # מערכת סוכנים אוטונומיים
+│   ├── base_agent.py
+│   └── agent_manager.py
+│
+├── templates/                 # תבניות HTML
+├── static/                    # CSS, JS
+├── tests/                     # בדיקות pytest
+├── migrations/                # מיגרציות Alembic
+├── tools/                     # כלי עזר
+├── docs/                      # תיעוד
+│
+├── Dockerfile                 # הגדרת Docker image
+├── docker-compose.yml         # Compose לפריסה
+└── alembic.ini                # קונפיגורציית Alembic
 ```
 
-## 🗄️ סכמת מסד הנתונים
+## סכמת מסד הנתונים
 
-המערכת משתמשת ב-10 טבלאות עיקריות:
+### טבלאות עיקריות
 
-1. **Term** - קדנציות
-2. **Category** - קטגוריות החלטות
-3. **DiscussionType** - סוגי דיונים
-4. **Faction** - סיעות
-5. **Role** - תפקידים
-6. **Person** - חברי מועצה
-7. **Board** - ועדות ומועצות
-8. **Meeting** - ישיבות
-9. **Discussion** - החלטות ודיונים
-10. **Vote** - הצבעות
-11. **Attendance** - נוכחות בישיבות
-12. **BudgetSource** - מקורות תקציב
+| טבלה | תיאור |
+|------|-------|
+| terms | קדנציות (תקופות כהונה) |
+| persons | חברי מועצה וסגל |
+| roles | תפקידים (היררכי) |
+| factions | סיעות (היררכי) |
+| boards | ועדות |
+| meetings | ישיבות |
+| discussions | סעיפי דיון |
+| votes | הצבעות |
+| attendances | נוכחות |
+| categories | קטגוריות (היררכי) |
+| discussion_types | סוגי דיון (היררכי) |
+| budget_sources | מקורות מימון |
 
-## 🔌 API Endpoints
+### שדות Discussion (דיון)
+
+| שדה | תיאור |
+|-----|-------|
+| title | כותרת הסעיף |
+| decision | סטטוס: אושר/לא אושר/ירד מסדר היום |
+| decision_statement | נוסח ההחלטה המלא |
+| summary | תקציר (נוצר ע"י LLM) |
+| expert_opinion | דברי הסבר |
+| yes_counter | מספר הצבעות בעד |
+| no_counter | מספר הצבעות נגד |
+| avoid_counter | מספר נמנעים |
+
+## API Endpoints
 
 ### סטטיסטיקות
 - `GET /api/stats` - סטטיסטיקות כלליות
 - `GET /api/periods` - קדנציות ושנים זמינים
-- `GET /api/current-term` - קדנציה נוכחית
 
-### חברי מועצה
+### נתונים
 - `GET /api/persons` - רשימת חברי מועצה
 - `GET /api/person/<id>` - פרטי חבר מועצה
-
-### ועדות
 - `GET /api/boards` - רשימת ועדות
-
-### החלטות
-- `GET /api/discussions` - רשימת החלטות
-- `GET /api/discussion/<id>` - פרטי החלטה
-
-### ישיבות
+- `GET /api/discussions` - רשימת דיונים
 - `GET /api/meetings` - רשימת ישיבות
 
-**פרמטרים לסינון:**
-- `filter_type`: 'all' / 'year' / 'term'
-- `filter_value`: מספר שנה או קדנציה
-- `year`: סינון משני לפי שנה
+## הרצת השרת
 
-## 🎨 ממשק המשתמש
-
-- **עיצוב רספונסיבי** - עובד על כל המכשירים
-- **תמיכה מלאה בעברית** - RTL, גופנים עבריים
-- **מערכת פילטרים גלובלית** - סינון לפי שנה/קדנציה
-- **אייקונים לקטגוריות** - ויזואליזציה ברורה
-- **אווטרים דינמיים** - ליצירת תמונות פרופיל
-
-## 📊 ניהול נתונים
-
-### ייבוא נתונים מ-Excel
 ```bash
-python import_data.py
+# אפליקציית אימות OCR
+python ocr_web_app.py
+# פתח: http://localhost:5000
+
+# הרצה עם Docker
+docker-compose up --build
 ```
 
-הסקריפט מייבא מ-4 קבצי Excel בתיקייה `yehudCsv/`:
-- `MemberOfCouncilExport.xlsx` - חברי מועצה
-- `CommitteesExport.xlsx` - ועדות
-- `MeetingsExport.xlsx` - ישיבות
-- `ProtocolsExport.xlsx` - פרוטוקולים והחלטות
-
-### איפוס מסד הנתונים
-```bash
-rm svivyNew.db
-python database.py
-python import_data.py
-```
-
-## 🧪 בדיקות
+## בדיקות
 
 ```bash
-# הרצת בדיקות
 pytest
-
-# בדיקות עם כיסוי
 pytest --cov=. --cov-report=html
-
-# בדיקת פילטרים
-python test_filters.py
 ```
 
-## 🛠️ פיתוח
+## קבצים עיקריים
 
-### כלי פיתוח מותקנים
-- **Black** - עיצוב קוד אוטומטי
-- **Flake8** - בדיקת איכות קוד
-- **Pytest** - מסגרת בדיקות
-
-### הרצת Black
-```bash
-black .
-```
-
-### הרצת Flake8
-```bash
-flake8 .
-```
-
-## 📚 תיעוד נוסף
-
-- `DATA_ANALYSIS.txt` - ניתוח מבנה נתוני Excel
-- `DATABASE_SUMMARY.txt` - סיכום בניית מסד הנתונים
-- `FILTER_ANALYSIS.md` - ניתוח מערכת הפילטרים
-- `archive/` - תיעוד מקיף של גרסה מורחבת (50+ טבלאות)
-
-## 🔧 בעיות ידועות
-
-1. **פילטר ברירת מחדל** - מוגדר לקדנציה 17 (ריקה)
-   - פתרון זמני: בחר קדנציה אחרת מהתפריט
-
-2. **אין CSS נפרד** - כרגע הסגנונות מוטמעים ב-HTML
-   - בתוכנית: הפרדה לקבצי CSS
-
-## 🚧 תוכנית עבודה עתידית
-
-- [ ] הפרדת CSS מ-HTML
-- [ ] הוספת אימות משתמשים
-- [ ] מערכת הרשאות
-- [ ] ייצוא דוחות לפי קטגוריות
-- [ ] גרפים ותרשימים מתקדמים
-- [ ] תמיכה ברשויות נוספות
-- [ ] API תיעוד (Swagger/OpenAPI)
-
-## 📄 רישיון
-
-מערכת פנימית לשימוש ברשויות מקומיות.
-
-## 👥 צוות הפיתוח
-
-פותח עבור עיריית יהוד-מונוסון
+| קובץ | שורות | תיאור |
+|------|-------|-------|
+| models.py | 335 | מודלים SQLAlchemy |
+| database.py | 107 | ניהול DB |
+| ocr_protocol.py | 1,563 | מנוע OCR |
+| ocr_validation_module.py | 904 | אימות פרוטוקולים |
+| llm_helper.py | 931 | עזר LLM |
+| import_data.py | 608 | ייבוא נתונים |
 
 ---
 
-**גרסה נוכחית:** 1.0
-**עדכון אחרון:** דצמבר 2025
+**גרסה:** 2.0
+**עדכון אחרון:** ינואר 2026
+**פותח עבור:** עיריית יהוד-מונוסון
+**רישיון:** MIT

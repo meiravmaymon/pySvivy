@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}פרטי ישיבה - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .value-selector {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .value-option {
+        padding: 8px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        flex: 1;
+        text-align: center;
+    }
+    .value-option:hover {
+        border-color: #0d6efd;
+        background: #f0f7ff;
+    }
+    .value-option.selected {
+        border-color: #198754;
+        background: #d1e7dd;
+    }
+    .value-option.ocr-option {
+        border-color: #dc3545;
+    }
+    .value-option.db-option {
+        border-color: #0d6efd;
+    }
+    .value-option.ocr-option.selected {
+        background: #f8d7da;
+        border-color: #dc3545;
+    }
+    .value-option.db-option.selected {
+        background: #cfe2ff;
+        border-color: #0d6efd;
+    }
+    .custom-input {
+        flex: 2;
+    }
+    .final-value {
+        font-weight: bold;
+        font-size: 1.1em;
+        padding: 10px;
+        background: #e8f5e9;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .field-row {
+        border-bottom: 1px solid #eee;
+        padding: 15px 0;
+    }
+    .field-row:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    פרטי ישיבה - השוואה ועריכה
+                </h4>
+                <span class="badge bg-primary">שלב 1 מתוך 4</span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    לחץ על הערך שברצונך לשמור, או הזן ערך מותאם אישית.
+                </div>
+
+                <!-- Meeting Number -->
+                <div class="field-row">
+                    <div class="row align-items-center">
+                        <div class="col-md-2">
+                            <strong><i class="bi bi-hash"></i> מספר ישיבה</strong>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="value-selector" data-field="meeting_no">
+                                <div class="value-option ocr-option {% if extracted.meeting_no == db_meeting.meeting_no %}selected{% endif %}"
+                                     data-value="{{ extracted.meeting_no or '' }}"
+                                     onclick="selectValue(this, 'meeting_no')">
+                                    <small class="text-muted d-block">OCR</small>
+                                    <span>{{ extracted.meeting_no or 'לא זוהה' }}</span>
+                                </div>
+                                <div class="value-option db-option {% if extracted.meeting_no != db_meeting.meeting_no %}selected{% endif %}"
+                                     data-value="{{ db_meeting.meeting_no }}"
+                                     onclick="selectValue(this, 'meeting_no')">
+                                    <small class="text-muted d-block">בסיס נתונים</small>
+                                    <span>{{ db_meeting.meeting_no }}</span>
+                                </div>
+                                <div class="custom-input">
+                                    <input type="text" class="form-control" id="custom_meeting_no"
+                                           placeholder="ערך מותאם אישית..."
+                                           onchange="setCustomValue('meeting_no', this.value)">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            {% if extracted.meeting_no == db_meeting.meeting_no %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i> תואם</span>
+                            {% else %}
+                            <span class="badge bg-warning"><i class="bi bi-exclamation"></i> שונה</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Date -->
+                <div class="field-row">
+                    <div class="row align-items-center">
+                        <div class="col-md-2">
+                            <strong><i class="bi bi-calendar"></i> תאריך</strong>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="value-selector" data-field="date">
+                                <div class="value-option ocr-option {% if extracted.date_str == db_meeting.date %}selected{% endif %}"
+                                     data-value="{{ extracted.date_str or '' }}"
+                                     onclick="selectValue(this, 'date')">
+                                    <small class="text-muted d-block">OCR</small>
+                                    <span>{{ extracted.date_str or 'לא זוהה' }}</span>
+                                </div>
+                                <div class="value-option db-option {% if extracted.date_str != db_meeting.date %}selected{% endif %}"
+                                     data-value="{{ db_meeting.date }}"
+                                     onclick="selectValue(this, 'date')">
+                                    <small class="text-muted d-block">בסיס נתונים</small>
+                                    <span>{{ db_meeting.date }}</span>
+                                </div>
+                                <div class="custom-input">
+                                    <input type="text" class="form-control" id="custom_date"
+                                           placeholder="DD/MM/YYYY"
+                                           onchange="setCustomValue('date', this.value)">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            {% if extracted.date_str == db_meeting.date %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i> תואם</span>
+                            {% else %}
+                            <span class="badge bg-warning"><i class="bi bi-exclamation"></i> שונה</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meeting Type -->
+                <div class="field-row">
+                    <div class="row align-items-center">
+                        <div class="col-md-2">
+                            <strong><i class="bi bi-tag"></i> סוג ישיבה</strong>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="value-selector" data-field="meeting_type">
+                                <div class="value-option ocr-option {% if extracted.meeting_type_heb == db_meeting.type %}selected{% endif %}"
+                                     data-value="{{ extracted.meeting_type_heb or extracted.meeting_type or '' }}"
+                                     onclick="selectValue(this, 'meeting_type')">
+                                    <small class="text-muted d-block">OCR</small>
+                                    <span>{{ extracted.meeting_type_heb or extracted.meeting_type or 'לא זוהה' }}</span>
+                                </div>
+                                <div class="value-option db-option {% if extracted.meeting_type_heb != db_meeting.type %}selected{% endif %}"
+                                     data-value="{{ db_meeting.type }}"
+                                     onclick="selectValue(this, 'meeting_type')">
+                                    <small class="text-muted d-block">בסיס נתונים</small>
+                                    <span>{{ db_meeting.type or 'לא מוגדר' }}</span>
+                                </div>
+                                <div class="custom-input">
+                                    <select class="form-select" id="custom_meeting_type"
+                                            onchange="setCustomValue('meeting_type', this.value)">
+                                        <option value="">-- בחר סוג --</option>
+                                        <option value="מן המניין">מן המניין</option>
+                                        <option value="שלא מן המניין">שלא מן המניין</option>
+                                        <option value="אסיפה כללית">אסיפה כללית</option>
+                                        <option value="חגיגית">חגיגית</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            {% if extracted.meeting_type_heb == db_meeting.type %}
+                            <span class="badge bg-success"><i class="bi bi-check"></i> תואם</span>
+                            {% else %}
+                            <span class="badge bg-warning"><i class="bi bi-exclamation"></i> שונה</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary of selected values -->
+                <div class="card bg-light mt-4">
+                    <div class="card-header">
+                        <i class="bi bi-check2-square"></i> ערכים נבחרים לשמירה
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <strong>מספר ישיבה</strong><br>
+                                <span class="final-value" id="final_meeting_no">{{ db_meeting.meeting_no }}</span>
+                            </div>
+                            <div class="col-4">
+                                <strong>תאריך</strong><br>
+                                <span class="final-value" id="final_date">{{ db_meeting.date }}</span>
+                            </div>
+                            <div class="col-4">
+                                <strong>סוג ישיבה</strong><br>
+                                <span class="final-value" id="final_meeting_type">{{ db_meeting.type or 'לא מוגדר' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור להתחלה
+                    </a>
+                    <div>
+                        <button class="btn btn-success me-2" id="saveMeetingInfo">
+                            <i class="bi bi-check-lg"></i>
+                            שמור שינויים
+                        </button>
+                        <a href="/step/2" class="btn btn-primary btn-lg">
+                            המשך לנוכחות
+                            <i class="bi bi-arrow-left"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Store selected values
+const selectedValues = {
+    meeting_no: '{{ db_meeting.meeting_no }}',
+    date: '{{ db_meeting.date }}',
+    meeting_type: '{{ db_meeting.type or "" }}'
+};
+
+function selectValue(element, field) {
+    // Remove selection from siblings
+    const parent = element.closest('.value-selector');
+    parent.querySelectorAll('.value-option').forEach(opt => opt.classList.remove('selected'));
+
+    // Select this option
+    element.classList.add('selected');
+
+    // Clear custom input
+    const customInput = parent.querySelector('input, select');
+    if (customInput) customInput.value = '';
+
+    // Update stored value
+    selectedValues[field] = element.getAttribute('data-value');
+
+    // Update final display
+    updateFinalDisplay(field);
+}
+
+function setCustomValue(field, value) {
+    if (!value) return;
+
+    // Remove selection from options
+    const selector = document.querySelector(`[data-field="${field}"]`);
+    selector.querySelectorAll('.value-option').forEach(opt => opt.classList.remove('selected'));
+
+    // Update stored value
+    selectedValues[field] = value;
+
+    // Update final display
+    updateFinalDisplay(field);
+}
+
+function updateFinalDisplay(field) {
+    const display = document.getElementById(`final_${field}`);
+    if (display) {
+        display.textContent = selectedValues[field] || 'לא מוגדר';
+    }
+}
+
+// Save button
+document.getElementById('saveMeetingInfo').addEventListener('click', async function() {
+    try {
+        const response = await fetch('/api/update_meeting', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                meeting_id: {{ db_meeting.id }},
+                meeting_no: selectedValues.meeting_no,
+                date: selectedValues.date,
+                meeting_type: selectedValues.meeting_type
+            })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('פרטי הישיבה נשמרו בהצלחה');
+        } else {
+            showToast(result.error || 'שגיאה בשמירה', 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בשמירה', 'danger');
+    }
+});
+</script>
+{% endblock %}

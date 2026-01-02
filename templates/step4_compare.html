@@ -1,0 +1,1155 @@
+{% extends "base.html" %}
+
+{% block title %}השוואת שדות - ולידציה{% endblock %}
+
+{% block extra_css %}
+<style>
+    .comparison-card {
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .comparison-header {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        padding: 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .comparison-header:hover {
+        background: linear-gradient(135deg, #e9ecef, #dee2e6);
+    }
+    .comparison-body {
+        padding: 20px;
+        display: none;
+        border-top: 1px solid #dee2e6;
+    }
+    .comparison-body.show {
+        display: block;
+    }
+    .discussion-number {
+        background: #198754;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+    }
+    .field-comparison {
+        margin-bottom: 25px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 10px;
+    }
+    .field-label {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 10px;
+        font-size: 1.1em;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 8px;
+    }
+    .value-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 10px;
+    }
+    .value-box {
+        flex: 1;
+        padding: 12px;
+        border-radius: 8px;
+        border: 2px solid #dee2e6;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .value-box:hover {
+        border-color: #6c757d;
+    }
+    .value-box.selected {
+        border-color: #198754;
+        background: #d1e7dd;
+    }
+    .value-box.db-value {
+        background: #cfe2ff;
+        border-color: #0d6efd;
+    }
+    .value-box.ocr-value {
+        background: #fff3cd;
+        border-color: #ffc107;
+    }
+    .value-box.custom-value {
+        background: #e2e3e5;
+        border-color: #6c757d;
+    }
+    .value-box.db-value.selected {
+        background: #b6d4fe;
+        border-color: #198754;
+    }
+    .value-box.ocr-value.selected {
+        background: #ffe69c;
+        border-color: #198754;
+    }
+    .value-box-header {
+        font-size: 0.8em;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .db-value .value-box-header { color: #084298; }
+    .ocr-value .value-box-header { color: #664d03; }
+    .value-content {
+        font-size: 0.95em;
+    }
+    .value-content.empty {
+        color: #6c757d;
+        font-style: italic;
+    }
+    .check-icon {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        color: #198754;
+        font-size: 1.2em;
+        display: none;
+    }
+    .value-box.selected .check-icon {
+        display: block;
+    }
+    .custom-input-area {
+        margin-top: 10px;
+        padding: 10px;
+        background: white;
+        border: 2px dashed #6c757d;
+        border-radius: 8px;
+    }
+    .vote-comparison {
+        display: flex;
+        gap: 20px;
+    }
+    .vote-group {
+        flex: 1;
+        text-align: center;
+    }
+    .vote-group label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .vote-inputs {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+    .vote-input-group {
+        text-align: center;
+    }
+    .vote-input-group small {
+        display: block;
+        margin-bottom: 3px;
+        color: #6c757d;
+    }
+    .vote-input-group input {
+        width: 60px;
+        text-align: center;
+    }
+    .phase-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+    .phase-step {
+        padding: 10px 20px;
+        border-radius: 20px;
+        background: #e9ecef;
+        color: #6c757d;
+    }
+    .phase-step.active {
+        background: #0d6efd;
+        color: white;
+    }
+    .phase-step.completed {
+        background: #198754;
+        color: white;
+    }
+    .nav-tabs-custom {
+        margin-bottom: 20px;
+    }
+    .nav-tabs-custom .nav-link {
+        border: 2px solid transparent;
+        border-radius: 10px 10px 0 0;
+    }
+    .nav-tabs-custom .nav-link.active {
+        border-color: #dee2e6;
+        border-bottom-color: white;
+        font-weight: bold;
+    }
+    .budget-display {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .budget-source {
+        padding: 5px 12px;
+        background: #e9ecef;
+        border-radius: 15px;
+        font-size: 0.9em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-columns-gap"></i>
+                    השוואת שדות - שלב 2: בחירת ערכים
+                </h4>
+                <span class="badge bg-primary">שלב 4ב מתוך 5</span>
+            </div>
+            <div class="card-body">
+                <!-- Phase Indicator -->
+                <div class="phase-indicator">
+                    <div class="phase-step completed">1. קישור סעיפים</div>
+                    <div class="phase-step active">2. השוואת שדות</div>
+                    <div class="phase-step">3. סעיפים לא מותאמים</div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>הוראות:</strong>
+                    עבור כל סעיף מותאם, בחר את הערך הרצוי עבור כל שדה: מבסיס הנתונים (כחול), מ-OCR (צהוב), או הזן ערך מותאם אישית.
+                </div>
+
+                <!-- Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-success bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0">{{ matched_discussions|length }}</h5>
+                            <small>סעיפים מותאמים</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-primary bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0">{{ db_only|length }}</h5>
+                            <small>רק ב-DB</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-warning bg-opacity-25 text-center p-3">
+                            <h5 class="mb-0">{{ ocr_only|length }}</h5>
+                            <small>רק ב-OCR</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matched Discussions Comparison -->
+                <div id="comparisonList">
+                    {% for item in matched_discussions %}
+                    <div class="comparison-card" data-db-id="{{ item.db.id }}" data-ocr-number="{{ item.ocr.number }}">
+                        <div class="comparison-header" onclick="toggleComparison(this)">
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="discussion-number">#{{ item.db.number }}</span>
+                                <strong>{{ item.db.title[:70] }}{% if item.db.title|length > 70 %}...{% endif %}</strong>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-light text-dark">
+                                    {% if item.match_type == 'auto' %}התאמה אוטומטית{% else %}התאמה ידנית{% endif %}
+                                </span>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+                        </div>
+
+                        <div class="comparison-body">
+                            <!-- Title/Content -->
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-card-heading"></i> כותרת / תוכן
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value selected" onclick="selectValue(this, 'title', 'db')" data-field="title" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.title %}empty{% endif %}">
+                                            {{ item.db.title or 'לא מוגדר' }}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value" onclick="selectValue(this, 'title', 'ocr')" data-field="title" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="value-content {% if not item.ocr.content %}empty{% endif %}">
+                                            {{ item.ocr.content or 'לא זוהה' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customTitle_{{ item.db.id }}" onchange="toggleCustom(this, 'title')">
+                                        <label class="form-check-label" for="customTitle_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <input type="text" class="form-control custom-field" data-field="title" style="display:none;" placeholder="הזן כותרת...">
+                                </div>
+                            </div>
+
+                            <!-- Decision Status (סטאטוס ההחלטה - קטגוריאלי) -->
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-check-circle"></i> סטאטוס ההחלטה
+                                    <small class="text-muted">(קטגוריאלי)</small>
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value selected" onclick="selectValue(this, 'decision', 'db')" data-field="decision" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.decision %}empty{% endif %}">
+                                            {{ item.db.decision or 'לא מוגדר' }}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value" onclick="selectValue(this, 'decision', 'ocr')" data-field="decision" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="value-content {% if not item.ocr.decision %}empty{% endif %}">
+                                            {{ item.ocr.decision or 'לא זוהתה' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customDecision_{{ item.db.id }}" onchange="toggleCustom(this, 'decision')">
+                                        <label class="form-check-label" for="customDecision_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <select class="form-select custom-field" data-field="decision" style="display:none;">
+                                        <option value="">-- בחר --</option>
+                                        <option value="אושר">אושר</option>
+                                        <option value="נדחה">נדחה</option>
+                                        <option value="אושר פה אחד">אושר פה אחד</option>
+                                        <option value="דיווח ועדכון">דיווח ועדכון</option>
+                                        <option value="ירד מסדר היום">ירד מסדר היום</option>
+                                        <option value="הועבר לדיון">הועבר לדיון</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Decision Statement (נוסח ההחלטה המלא) -->
+                            {% if item.db.decision_statement or item.ocr.decision_statement %}
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-file-earmark-text"></i> נוסח ההחלטה
+                                    <small class="text-muted">(הטקסט המלא)</small>
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value {% if item.db.decision_statement %}selected{% endif %}" onclick="selectValue(this, 'decision_statement', 'db')" data-field="decision_statement" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.decision_statement %}empty{% endif %}" style="max-height: 150px; overflow-y: auto;">
+                                            {{ item.db.decision_statement or 'לא מוגדר' }}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value {% if not item.db.decision_statement and item.ocr.decision_statement %}selected{% endif %}" onclick="selectValue(this, 'decision_statement', 'ocr')" data-field="decision_statement" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="value-content {% if not item.ocr.decision_statement %}empty{% endif %}" style="max-height: 150px; overflow-y: auto;">
+                                            {{ item.ocr.decision_statement or 'לא זוהה' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customDecisionStatement_{{ item.db.id }}" onchange="toggleCustomTextarea(this, 'decision_statement')">
+                                        <label class="form-check-label" for="customDecisionStatement_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <textarea class="form-control custom-field" data-field="decision_statement" style="display:none;" rows="3" placeholder="הזן נוסח החלטה מלא..."></textarea>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Votes -->
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-hand-thumbs-up"></i> הצבעה
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value vote-source-box selected" onclick="selectVoteSource(this, 'db')" data-field="votes" data-source="db"
+                                         data-yes="{{ item.db.yes_votes }}" data-no="{{ item.db.no_votes }}" data-avoid="{{ item.db.avoid_votes }}">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="vote-inputs">
+                                            <div class="vote-input-group">
+                                                <small class="text-success">בעד</small>
+                                                <span class="badge bg-success">{{ item.db.yes_votes }}</span>
+                                            </div>
+                                            <div class="vote-input-group">
+                                                <small class="text-danger">נגד</small>
+                                                <span class="badge bg-danger">{{ item.db.no_votes }}</span>
+                                            </div>
+                                            <div class="vote-input-group">
+                                                <small class="text-warning">נמנע</small>
+                                                <span class="badge bg-warning text-dark">{{ item.db.avoid_votes }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value vote-source-box" onclick="selectVoteSource(this, 'ocr')" data-field="votes" data-source="ocr"
+                                         data-yes="{{ item.ocr.yes_votes or (15 if item.ocr.vote_type == 'unanimous' else 0) }}"
+                                         data-no="{{ item.ocr.no_votes or 0 }}"
+                                         data-avoid="{{ item.ocr.avoid_votes or 0 }}">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="vote-inputs">
+                                            <div class="vote-input-group">
+                                                <small class="text-success">בעד</small>
+                                                <span class="badge bg-success">{{ item.ocr.yes_votes or (15 if item.ocr.vote_type == 'unanimous' else 0) }}</span>
+                                            </div>
+                                            <div class="vote-input-group">
+                                                <small class="text-danger">נגד</small>
+                                                <span class="badge bg-danger">{{ item.ocr.no_votes or 0 }}</span>
+                                            </div>
+                                            <div class="vote-input-group">
+                                                <small class="text-warning">נמנע</small>
+                                                <span class="badge bg-warning text-dark">{{ item.ocr.avoid_votes or 0 }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area mt-3">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customVotes_{{ item.db.id }}" onchange="toggleCustomVotes(this)">
+                                        <label class="form-check-label" for="customVotes_{{ item.db.id }}">
+                                            הזן ערכים מותאמים אישית
+                                        </label>
+                                    </div>
+                                    <div class="custom-votes-inputs" style="display: none;">
+                                        <div class="d-flex gap-3">
+                                            <div class="flex-fill">
+                                                <label class="small text-success">בעד</label>
+                                                <input type="number" class="form-control vote-input" data-vote="yes"
+                                                       value="{{ item.db.yes_votes }}" min="0">
+                                            </div>
+                                            <div class="flex-fill">
+                                                <label class="small text-danger">נגד</label>
+                                                <input type="number" class="form-control vote-input" data-vote="no"
+                                                       value="{{ item.db.no_votes }}" min="0">
+                                            </div>
+                                            <div class="flex-fill">
+                                                <label class="small text-warning">נמנע</label>
+                                                <input type="number" class="form-control vote-input" data-vote="avoid"
+                                                       value="{{ item.db.avoid_votes }}" min="0">
+                                            </div>
+                                            <div class="align-self-end">
+                                                <button class="btn btn-outline-secondary btn-sm" onclick="setUnanimous(this)">
+                                                    פה אחד
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Expert Opinion -->
+                            {% if item.db.expert_opinion or item.ocr.expert_opinion %}
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-lightbulb text-warning"></i> דעת מומחה / דברי הסבר
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value {% if item.db.expert_opinion %}selected{% endif %}" onclick="selectValue(this, 'expert_opinion', 'db')" data-field="expert_opinion" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.expert_opinion %}empty{% endif %}" style="max-height: 150px; overflow-y: auto;">
+                                            {{ item.db.expert_opinion or 'לא מוגדר' }}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value {% if not item.db.expert_opinion and item.ocr.expert_opinion %}selected{% endif %}" onclick="selectValue(this, 'expert_opinion', 'ocr')" data-field="expert_opinion" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="value-content {% if not item.ocr.expert_opinion %}empty{% endif %}" style="max-height: 150px; overflow-y: auto;">
+                                            {{ item.ocr.expert_opinion or 'לא זוהה' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customExpertOpinion_{{ item.db.id }}" onchange="toggleCustomTextarea(this, 'expert_opinion')">
+                                        <label class="form-check-label" for="customExpertOpinion_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <textarea class="form-control custom-field" data-field="expert_opinion" style="display:none;" rows="3" placeholder="הזן דברי הסבר..."></textarea>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Budget -->
+                            {% if item.db.total_budget or item.ocr.budget %}
+                            <div class="field-comparison">
+                                <div class="field-label">
+                                    <i class="bi bi-currency-exchange text-success"></i> תקציב
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value {% if item.db.total_budget %}selected{% endif %}" onclick="selectValue(this, 'budget', 'db')" data-field="budget" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.total_budget %}empty{% endif %}">
+                                            {% if item.db.total_budget %}
+                                            <strong>{{ "{:,.0f}".format(item.db.total_budget) }} ₪</strong>
+                                            {% if item.db.budget_sources %}
+                                            <div class="budget-display mt-2">
+                                                {% for src in item.db.budget_sources %}
+                                                <span class="budget-source">{{ src.source_name }}: {{ "{:,.0f}".format(src.amount) }}₪</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            {% else %}
+                                            לא מוגדר
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value {% if not item.db.total_budget and item.ocr.budget %}selected{% endif %}" onclick="selectValue(this, 'budget', 'ocr')" data-field="budget" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR</div>
+                                        <div class="value-content {% if not item.ocr.budget %}empty{% endif %}">
+                                            {% if item.ocr.budget %}
+                                            <strong>{{ "{:,.0f}".format(item.ocr.budget) }} ₪</strong>
+                                            {% if item.ocr.budget_sources %}
+                                            <div class="budget-display mt-2">
+                                                {% for src in item.ocr.budget_sources %}
+                                                <span class="budget-source">{{ src.source }}: {{ "{:,.0f}".format(src.amount) }}₪</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            {% else %}
+                                            לא זוהה
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customBudget_{{ item.db.id }}" onchange="toggleCustom(this, 'budget')">
+                                        <label class="form-check-label" for="customBudget_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <input type="number" class="form-control custom-field" data-field="budget" style="display:none;" placeholder="הזן סכום תקציב...">
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Administrative Category / סיווג מנהלתי -->
+                            <div class="field-comparison" data-field-type="admin_category">
+                                <div class="field-label d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="bi bi-diagram-3"></i> סיווג מנהלתי
+                                        {% if item.ocr.admin_category_auto %}
+                                        <span class="badge bg-info ms-2">זוהה אוטומטית</span>
+                                        {% endif %}
+                                        {% if item.ocr.admin_category_confidence %}
+                                        <span class="badge {% if item.ocr.admin_category_confidence > 0.7 %}bg-success{% elif item.ocr.admin_category_confidence > 0.4 %}bg-warning{% else %}bg-secondary{% endif %} ms-1">
+                                            רמת ביטחון: {{ (item.ocr.admin_category_confidence * 100)|int }}%
+                                        </span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value {% if item.db.admin_category_code %}selected{% endif %}"
+                                         onclick="selectValue(this, 'admin_category', 'db')"
+                                         data-field="admin_category" data-source="db"
+                                         data-category-code="{{ item.db.admin_category_code or '' }}">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.admin_category_code %}empty{% endif %}">
+                                            {% if item.db.admin_category_name %}
+                                            <span class="badge bg-primary">{{ item.db.admin_category_code }}</span>
+                                            {{ item.db.admin_category_name }}
+                                            {% else %}
+                                            לא מסווג
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value {% if not item.db.admin_category_code and item.ocr.admin_category_code %}selected{% endif %}"
+                                         onclick="selectValue(this, 'admin_category', 'ocr')"
+                                         data-field="admin_category" data-source="ocr"
+                                         data-category-code="{{ item.ocr.admin_category_code or '' }}">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR (אוטומטי)</div>
+                                        <div class="value-content {% if not item.ocr.admin_category_code %}empty{% endif %}">
+                                            {% if item.ocr.admin_category_code %}
+                                            <span class="badge bg-warning text-dark">{{ item.ocr.admin_category_code }}</span>
+                                            <span class="ocr-category-name" data-code="{{ item.ocr.admin_category_code }}">טוען...</span>
+                                            {% else %}
+                                            לא זוהה
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customAdminCategory_{{ item.db.id }}" onchange="toggleCustom(this, 'admin_category')">
+                                        <label class="form-check-label" for="customAdminCategory_{{ item.db.id }}">
+                                            בחר סיווג אחר
+                                        </label>
+                                    </div>
+                                    <select class="form-select custom-field admin-category-select" data-field="admin_category" style="display:none;">
+                                        <option value="">-- בחר סיווג --</option>
+                                        <!-- Options loaded dynamically -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Summary with approval UI -->
+                            {% if item.db.summary or item.ocr.summary %}
+                            <div class="field-comparison" data-summary-field="true">
+                                <div class="field-label d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="bi bi-file-text"></i> תקציר (מעובד LLM)
+                                        {% if item.ocr.summary_llm_generated %}
+                                        <span class="badge bg-info ms-2">נוצר ב-AI</span>
+                                        {% endif %}
+                                        {% if item.ocr.summary_confidence %}
+                                        <span class="badge {% if item.ocr.summary_confidence > 0.7 %}bg-success{% elif item.ocr.summary_confidence > 0.4 %}bg-warning{% else %}bg-secondary{% endif %} ms-1">
+                                            רמת ביטחון: {{ (item.ocr.summary_confidence * 100)|int }}%
+                                        </span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="value-row">
+                                    <div class="value-box db-value {% if item.db.summary %}selected{% endif %}" onclick="selectValue(this, 'summary', 'db')" data-field="summary" data-source="db">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-database"></i> DB</div>
+                                        <div class="value-content {% if not item.db.summary %}empty{% endif %}" style="max-height: 120px; overflow-y: auto;">
+                                            {{ item.db.summary or 'לא מוגדר' }}
+                                        </div>
+                                    </div>
+                                    <div class="value-box ocr-value {% if not item.db.summary and item.ocr.summary %}selected{% endif %}" onclick="selectValue(this, 'summary', 'ocr')" data-field="summary" data-source="ocr">
+                                        <i class="bi bi-check-circle-fill check-icon"></i>
+                                        <div class="value-box-header"><i class="bi bi-file-pdf"></i> OCR (נוצר מ-AI)</div>
+                                        <div class="value-content {% if not item.ocr.summary %}empty{% endif %}" style="max-height: 120px; overflow-y: auto;">
+                                            {{ item.ocr.summary or 'לא זוהה' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Summary Approval Buttons -->
+                                {% if item.ocr.summary %}
+                                <div class="summary-approval-area mt-2 p-2 rounded" style="background: #f8f9fa; border: 1px solid #dee2e6;">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-muted small">האם התקציר שנוצר ע"י ה-AI מדויק?</span>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-success btn-sm summary-approve-btn"
+                                                    onclick="approveSummary(this, {{ item.db.id }}, true)"
+                                                    data-approved="false">
+                                                <i class="bi bi-hand-thumbs-up"></i> מאשר
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm summary-reject-btn"
+                                                    onclick="approveSummary(this, {{ item.db.id }}, false)"
+                                                    data-approved="false">
+                                                <i class="bi bi-hand-thumbs-down"></i> דורש תיקון
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                <div class="custom-input-area">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="customSummary_{{ item.db.id }}" onchange="toggleCustomTextarea(this, 'summary')">
+                                        <label class="form-check-label" for="customSummary_{{ item.db.id }}">
+                                            הזן ערך מותאם אישית
+                                        </label>
+                                    </div>
+                                    <textarea class="form-control custom-field" data-field="summary" style="display:none;" rows="3" placeholder="הזן תקציר..."></textarea>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Save Button -->
+                            <div class="text-end mt-3">
+                                <button class="btn btn-success save-comparison" onclick="saveComparison(this)">
+                                    <i class="bi bi-check-lg"></i> שמור סעיף
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- No matches message -->
+                {% if not matched_discussions %}
+                <div class="alert alert-warning text-center">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    אין סעיפים מותאמים להשוואה. חזור לשלב הקישור או המשך לסעיפים הלא מותאמים.
+                </div>
+                {% endif %}
+
+                <!-- Bottom Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/step/4a" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-right"></i>
+                        חזור לקישור
+                    </a>
+                    <div>
+                        <button class="btn btn-success me-2" onclick="saveAll()">
+                            <i class="bi bi-check-all"></i>
+                            שמור הכל
+                        </button>
+                        <button class="btn btn-primary btn-lg" onclick="proceedToUnmatched()">
+                            המשך לסעיפים לא מותאמים
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleComparison(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('show');
+    const icon = header.querySelector('.bi-chevron-down, .bi-chevron-up');
+    if (icon) {
+        icon.classList.toggle('bi-chevron-down');
+        icon.classList.toggle('bi-chevron-up');
+    }
+}
+
+function selectValue(element, field, source) {
+    const card = element.closest('.comparison-card');
+    const fieldComparison = element.closest('.field-comparison');
+
+    // Deselect all in this field
+    fieldComparison.querySelectorAll('.value-box').forEach(box => {
+        box.classList.remove('selected');
+    });
+
+    // Select this one
+    element.classList.add('selected');
+
+    // Uncheck custom checkbox
+    const customCheckbox = fieldComparison.querySelector('.form-check-input');
+    if (customCheckbox) {
+        customCheckbox.checked = false;
+        const customField = fieldComparison.querySelector('.custom-field');
+        if (customField) customField.style.display = 'none';
+    }
+}
+
+function toggleCustom(checkbox, field) {
+    const fieldComparison = checkbox.closest('.field-comparison');
+    const customField = fieldComparison.querySelector('.custom-field');
+
+    if (checkbox.checked) {
+        customField.style.display = 'block';
+        // Deselect value boxes
+        fieldComparison.querySelectorAll('.value-box').forEach(box => {
+            box.classList.remove('selected');
+        });
+    } else {
+        customField.style.display = 'none';
+        // Select DB by default
+        const dbBox = fieldComparison.querySelector('.value-box.db-value');
+        if (dbBox) dbBox.classList.add('selected');
+    }
+}
+
+function toggleCustomTextarea(checkbox, field) {
+    toggleCustom(checkbox, field);
+}
+
+function setUnanimous(btn) {
+    const card = btn.closest('.comparison-card');
+    card.querySelector('.vote-input[data-vote="yes"]').value = 15;
+    card.querySelector('.vote-input[data-vote="no"]').value = 0;
+    card.querySelector('.vote-input[data-vote="avoid"]').value = 0;
+    showToast('הוגדר: פה אחד');
+}
+
+function selectVoteSource(element, source) {
+    const card = element.closest('.comparison-card');
+    const fieldComparison = element.closest('.field-comparison');
+
+    // Deselect all vote source boxes
+    fieldComparison.querySelectorAll('.vote-source-box').forEach(box => {
+        box.classList.remove('selected');
+    });
+
+    // Select this one
+    element.classList.add('selected');
+
+    // Update the vote input values based on source
+    const yesVal = element.dataset.yes;
+    const noVal = element.dataset.no;
+    const avoidVal = element.dataset.avoid;
+
+    const customInputs = fieldComparison.querySelector('.custom-votes-inputs');
+    if (customInputs) {
+        customInputs.querySelector('.vote-input[data-vote="yes"]').value = yesVal;
+        customInputs.querySelector('.vote-input[data-vote="no"]').value = noVal;
+        customInputs.querySelector('.vote-input[data-vote="avoid"]').value = avoidVal;
+    }
+
+    // Uncheck custom checkbox
+    const customCheckbox = fieldComparison.querySelector('.form-check-input');
+    if (customCheckbox) {
+        customCheckbox.checked = false;
+        fieldComparison.querySelector('.custom-votes-inputs').style.display = 'none';
+    }
+}
+
+function toggleCustomVotes(checkbox) {
+    const fieldComparison = checkbox.closest('.field-comparison');
+    const customInputs = fieldComparison.querySelector('.custom-votes-inputs');
+
+    if (checkbox.checked) {
+        customInputs.style.display = 'block';
+        // Deselect vote source boxes
+        fieldComparison.querySelectorAll('.vote-source-box').forEach(box => {
+            box.classList.remove('selected');
+        });
+    } else {
+        customInputs.style.display = 'none';
+        // Select DB by default
+        const dbBox = fieldComparison.querySelector('.vote-source-box.db-value');
+        if (dbBox) dbBox.classList.add('selected');
+    }
+}
+
+function getComparisonData(card) {
+    const dbId = card.dataset.dbId;
+    const ocrNumber = card.dataset.ocrNumber;
+
+    // Collect selected values
+    const data = {
+        discussion_id: dbId,
+        ocr_number: ocrNumber
+    };
+
+    // Helper function to get field value
+    function getFieldValue(fieldName) {
+        const customField = card.querySelector(`.custom-field[data-field="${fieldName}"]`);
+        if (customField && customField.style.display !== 'none' && customField.value) {
+            return { value: customField.value, source: 'custom' };
+        }
+        const selectedBox = card.querySelector(`[data-field="${fieldName}"].selected`);
+        if (selectedBox) {
+            return { value: null, source: selectedBox.dataset.source };
+        }
+        return null;
+    }
+
+    // Title
+    const titleResult = getFieldValue('title');
+    if (titleResult) {
+        if (titleResult.source === 'custom') {
+            data.title = titleResult.value;
+        } else {
+            data.title_source = titleResult.source;
+        }
+    }
+
+    // Decision (status)
+    const decisionResult = getFieldValue('decision');
+    if (decisionResult) {
+        if (decisionResult.source === 'custom') {
+            data.decision = decisionResult.value;
+        } else {
+            data.decision_source = decisionResult.source;
+        }
+    }
+
+    // Decision Statement (full text - נוסח ההחלטה)
+    const decisionStatementResult = getFieldValue('decision_statement');
+    if (decisionStatementResult) {
+        if (decisionStatementResult.source === 'custom') {
+            data.decision_statement = decisionStatementResult.value;
+        } else {
+            data.decision_statement_source = decisionStatementResult.source;
+        }
+    }
+
+    // Expert Opinion
+    const expertResult = getFieldValue('expert_opinion');
+    if (expertResult) {
+        if (expertResult.source === 'custom') {
+            data.expert_opinion = expertResult.value;
+        } else {
+            data.expert_opinion_source = expertResult.source;
+        }
+    }
+
+    // Summary
+    const summaryResult = getFieldValue('summary');
+    if (summaryResult) {
+        if (summaryResult.source === 'custom') {
+            data.summary = summaryResult.value;
+        } else {
+            data.summary_source = summaryResult.source;
+        }
+    }
+
+    // Administrative Category
+    const adminCategoryResult = getFieldValue('admin_category');
+    if (adminCategoryResult) {
+        if (adminCategoryResult.source === 'custom') {
+            data.admin_category_code = adminCategoryResult.value;
+        } else {
+            data.admin_category_source = adminCategoryResult.source;
+        }
+    }
+
+    // Budget
+    const budgetResult = getFieldValue('budget');
+    if (budgetResult) {
+        if (budgetResult.source === 'custom') {
+            data.budget = parseFloat(budgetResult.value) || 0;
+        } else {
+            data.budget_source = budgetResult.source;
+        }
+    }
+
+    // Votes - check if custom is enabled or use selected source
+    const votesFieldComparison = card.querySelector('.field-comparison:has(.vote-source-box)');
+    const customVotesCheckbox = votesFieldComparison ? votesFieldComparison.querySelector('input[id^="customVotes_"]') : null;
+
+    if (customVotesCheckbox && customVotesCheckbox.checked) {
+        // Use custom vote inputs
+        const yesInput = card.querySelector('.vote-input[data-vote="yes"]');
+        const noInput = card.querySelector('.vote-input[data-vote="no"]');
+        const avoidInput = card.querySelector('.vote-input[data-vote="avoid"]');
+
+        data.yes_votes = yesInput ? (parseInt(yesInput.value) || 0) : 0;
+        data.no_votes = noInput ? (parseInt(noInput.value) || 0) : 0;
+        data.avoid_votes = avoidInput ? (parseInt(avoidInput.value) || 0) : 0;
+        data.votes_source = 'custom';
+    } else {
+        // Use selected source box values
+        const selectedVoteBox = card.querySelector('.vote-source-box.selected');
+        if (selectedVoteBox) {
+            data.yes_votes = parseInt(selectedVoteBox.dataset.yes) || 0;
+            data.no_votes = parseInt(selectedVoteBox.dataset.no) || 0;
+            data.avoid_votes = parseInt(selectedVoteBox.dataset.avoid) || 0;
+            data.votes_source = selectedVoteBox.dataset.source;
+        } else {
+            // Default to DB values
+            const dbBox = card.querySelector('.vote-source-box.db-value');
+            if (dbBox) {
+                data.yes_votes = parseInt(dbBox.dataset.yes) || 0;
+                data.no_votes = parseInt(dbBox.dataset.no) || 0;
+                data.avoid_votes = parseInt(dbBox.dataset.avoid) || 0;
+                data.votes_source = 'db';
+            }
+        }
+    }
+
+    return data;
+}
+
+async function saveComparison(btn) {
+    const card = btn.closest('.comparison-card');
+    const data = getComparisonData(card);
+
+    try {
+        const response = await fetch('/api/save_comparison', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> נשמר!';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-success');
+            setTimeout(() => {
+                btn.innerHTML = '<i class="bi bi-check-lg"></i> שמור סעיף';
+                btn.classList.add('btn-success');
+                btn.classList.remove('btn-outline-success');
+            }, 2000);
+            showToast('הסעיף נשמר');
+        } else {
+            showToast(result.error || 'שגיאה בשמירה', 'danger');
+        }
+    } catch (error) {
+        showToast('שגיאה בשמירה', 'danger');
+    }
+}
+
+async function saveAll() {
+    showLoading();
+    const cards = document.querySelectorAll('.comparison-card');
+    let saved = 0;
+    let errors = 0;
+
+    for (const card of cards) {
+        const data = getComparisonData(card);
+        try {
+            const response = await fetch('/api/save_comparison', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (result.success) saved++;
+            else errors++;
+        } catch (error) {
+            errors++;
+        }
+    }
+
+    hideLoading();
+    if (errors === 0) {
+        showToast(`נשמרו ${saved} סעיפים בהצלחה!`);
+    } else {
+        showToast(`נשמרו ${saved} סעיפים, ${errors} שגיאות`, 'warning');
+    }
+}
+
+function proceedToUnmatched() {
+    window.location.href = '/step/4c';
+}
+
+// Summary approval functionality
+async function approveSummary(btn, discussionId, approved) {
+    const approvalArea = btn.closest('.summary-approval-area');
+    const card = btn.closest('.comparison-card');
+    const approveBtn = approvalArea.querySelector('.summary-approve-btn');
+    const rejectBtn = approvalArea.querySelector('.summary-reject-btn');
+
+    // Reset both buttons
+    approveBtn.classList.remove('btn-success', 'active');
+    approveBtn.classList.add('btn-outline-success');
+    rejectBtn.classList.remove('btn-danger', 'active');
+    rejectBtn.classList.add('btn-outline-danger');
+
+    // Activate the clicked button
+    if (approved) {
+        approveBtn.classList.remove('btn-outline-success');
+        approveBtn.classList.add('btn-success', 'active');
+        approveBtn.dataset.approved = 'true';
+        rejectBtn.dataset.approved = 'false';
+        // If approved, automatically select OCR summary
+        const ocrSummaryBox = card.querySelector('[data-field="summary"][data-source="ocr"]');
+        if (ocrSummaryBox) {
+            selectValue(ocrSummaryBox, 'summary', 'ocr');
+        }
+    } else {
+        rejectBtn.classList.remove('btn-outline-danger');
+        rejectBtn.classList.add('btn-danger', 'active');
+        rejectBtn.dataset.approved = 'true';
+        approveBtn.dataset.approved = 'false';
+        // If rejected, show custom input for correction
+        const customCheckbox = card.querySelector('#customSummary_' + discussionId);
+        if (customCheckbox && !customCheckbox.checked) {
+            customCheckbox.checked = true;
+            toggleCustomTextarea(customCheckbox, 'summary');
+        }
+    }
+
+    // Store approval status for learning
+    card.dataset.summaryApproved = approved ? 'approved' : 'rejected';
+
+    // Log to learning system
+    try {
+        await fetch('/api/log_summary_feedback', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                discussion_id: discussionId,
+                approved: approved,
+                ocr_summary: card.querySelector('[data-field="summary"][data-source="ocr"] .value-content')?.textContent?.trim() || ''
+            })
+        });
+        showToast(approved ? 'משוב: תקציר מאושר' : 'משוב: תקציר נדחה - אנא תקן', approved ? 'success' : 'warning');
+    } catch (error) {
+        console.error('Failed to log summary feedback:', error);
+    }
+}
+
+// Global storage for admin categories
+let adminCategoriesCache = null;
+
+// Load admin categories and populate dropdowns
+async function loadAdminCategories() {
+    if (adminCategoriesCache) return adminCategoriesCache;
+
+    try {
+        const response = await fetch('/api/get_admin_categories');
+        adminCategoriesCache = await response.json();
+
+        // Populate all dropdowns
+        document.querySelectorAll('.admin-category-select').forEach(select => {
+            // Group by parent category
+            const grouped = {};
+            adminCategoriesCache.forEach(cat => {
+                const parent = cat.parent_code || 'ROOT';
+                if (!grouped[parent]) grouped[parent] = [];
+                grouped[parent].push(cat);
+            });
+
+            // Add options (main categories first, then sub-categories)
+            const mainCategories = grouped['ROOT'] || [];
+            mainCategories.forEach(mainCat => {
+                // Add main category as optgroup
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = mainCat.name_he;
+
+                // Add sub-categories
+                const subCats = grouped[mainCat.code] || [];
+                if (subCats.length > 0) {
+                    subCats.forEach(subCat => {
+                        const option = document.createElement('option');
+                        option.value = subCat.code;
+                        option.textContent = `${subCat.code} - ${subCat.name_he}`;
+                        optgroup.appendChild(option);
+                    });
+                    select.appendChild(optgroup);
+                } else {
+                    // If no sub-categories, add main category as option
+                    const option = document.createElement('option');
+                    option.value = mainCat.code;
+                    option.textContent = `${mainCat.code} - ${mainCat.name_he}`;
+                    select.appendChild(option);
+                }
+            });
+        });
+
+        // Update OCR category names that show "טוען..."
+        document.querySelectorAll('.ocr-category-name').forEach(span => {
+            const code = span.dataset.code;
+            const cat = adminCategoriesCache.find(c => c.code === code);
+            if (cat) {
+                span.textContent = cat.name_he;
+            } else {
+                span.textContent = code; // Just show code if not found
+            }
+        });
+
+        return adminCategoriesCache;
+    } catch (error) {
+        console.error('Failed to load admin categories:', error);
+        return [];
+    }
+}
+
+// Expand first item by default
+document.addEventListener('DOMContentLoaded', function() {
+    const firstCard = document.querySelector('.comparison-card');
+    if (firstCard) {
+        const body = firstCard.querySelector('.comparison-body');
+        if (body) body.classList.add('show');
+    }
+
+    // Load admin categories
+    loadAdminCategories();
+});
+</script>
+{% endblock %}

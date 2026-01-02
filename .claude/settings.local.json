@@ -9,7 +9,17 @@
       "Bash(ls:*)",
       "Bash(curl:*)",
       "Bash(dir /B /S \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\")",
-      "Bash(dir \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\")"
+      "Bash(dir \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\")",
+      "Bash(dir /B *.pdf)",
+      "Bash(taskkill:*)",
+      "Bash(cat:*)",
+      "Bash(iconv:*)",
+      "Bash(dir /B *.txt *.json *.md)",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(del \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\\\\templates\\\\step4_discussions.html\")"
     ]
   }
 }
