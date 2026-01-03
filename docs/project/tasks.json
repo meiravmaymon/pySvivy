@@ -1,0 +1,27 @@
+{
+  "tasks": [
+    {
+      "id": "task_0001",
+      "title": "כיבוי debug mode לפני production",
+      "description": "לשנות debug=True ל-debug=False בקובץ ocr_web_app.py שורה 1697 לפני העלאה לפרודקשן. מצב debug מסוכן בסביבת ייצור כי הוא חושף מידע רגיש בהודעות שגיאה.",
+      "status": "backlog",
+      "priority": "high",
+      "parent_id": null,
+      "created_at": "2026-01-03T08:30:00",
+      "completed_at": null,
+      "blocked_reason": null,
+      "tags": ["production", "security", "deployment"]
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal_0001",
+      "title": "הכנת המערכת לפרודקשן",
+      "description": "כל המשימות הנדרשות להעברת המערכת מסביבת פיתוח לייצור",
+      "features": ["task_0001"],
+      "created_at": "2026-01-03T08:30:00",
+      "completed_at": null
+    }
+  ],
+  "updated_at": "2026-01-03T08:30:00"
+}

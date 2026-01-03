@@ -397,7 +397,7 @@
         function finalizeValidation() {
             if (!confirm('האם לשמור את כל השינויים לבסיס הנתונים?')) return;
 
-            showLoading('שומר שינויים...');
+            showLoading('שומר שינויים ומעביר קובץ...');
             const sid = getSid();
 
             fetch('/api/finalize_validation', {
@@ -409,12 +409,17 @@
             .then(data => {
                 hideLoading();
                 if (data.success) {
-                    showToast(data.message, 'success');
-                    updatePendingIndicator();
-                    // Optionally redirect or show completion message
+                    // Show success message with PDF info
+                    let message = data.message;
+                    if (data.pdf_moved) {
+                        message += '\n' + data.pdf_message;
+                    }
+                    showToast(message, 'success');
+
+                    // Redirect to home page after short delay
                     setTimeout(() => {
-                        window.location.href = '/api/move_to_processed?sid=' + sid;
-                    }, 1500);
+                        window.location.href = '/';
+                    }, 2000);
                 } else {
                     showToast('שגיאה: ' + data.error, 'danger');
                 }

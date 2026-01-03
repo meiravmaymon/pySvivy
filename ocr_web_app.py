@@ -43,7 +43,152 @@ config.ensure_folders()
 # Global storage for current session data - keyed by session ID (sid)
 # Each tab gets its own sid for isolated data storage
 import uuid
+import threading
+import queue
+from collections import OrderedDict
+
 session_data_store = {}
+
+# ==============================================================================
+# Processing Queue System - מערכת תור עיבוד ברקע
+# ==============================================================================
+# Allows batch processing of PDFs in background while user works on other tasks
+
+# Queue structure
+processing_queue = queue.Queue()
+processing_status = {
+    'is_running': False,
+    'current_file': None,
+    'current_index': 0,
+    'total_files': 0,
+    'completed': [],      # List of {sid, filename, status, error?}
+    'failed': [],         # List of {filename, error}
+    'pending': [],        # List of filenames waiting to be processed
+    'year': None,         # Current batch year
+    'started_at': None,
+    'completed_at': None
+}
+processing_lock = threading.Lock()
+
+def process_pdf_for_queue(file_path, filename):
+    """
+    Process a single PDF and store results in session_data_store.
+    Returns (sid, success, error_message)
+    Each PDF gets its own unique sid for data isolation.
+    """
+    # Generate unique sid for this file
+    sid = str(uuid.uuid4())[:8]
+
+    try:
+        # Extract text from PDF
+        ocr_text = extract_text_from_pdf(file_path)
+
+        # Extract protocol data
+        extracted_data = parse_protocol_text(ocr_text)
+
+        # Try to extract municipality name from OCR text
+        detected_municipality = extract_municipality_name(ocr_text)
+        extracted_data['detected_municipality'] = detected_municipality
+
+        # Auto-classify each discussion
+        for disc in extracted_data.get('discussions', []):
+            try:
+                title = disc.get('content', '') or disc.get('title', '')
+                classification = classify_discussion_admin_category(title)
+                disc['admin_category_code'] = classification.get('category_code')
+                disc['admin_category_confidence'] = classification.get('confidence', 0)
+                disc['admin_category_auto'] = True
+            except Exception as e:
+                logger.warning(f"Failed to classify discussion: {e}")
+                disc['admin_category_code'] = None
+                disc['admin_category_confidence'] = 0
+                disc['admin_category_auto'] = False
+
+        # Store in session_data_store with unique sid
+        session_data_store[sid] = {
+            'original_pdf_path': file_path,
+            'pdf_path': file_path,
+            'ocr_filename': filename,
+            'extracted': extracted_data,
+            'ocr_text': ocr_text,
+            'pending_changes': {
+                'meeting': {},
+                'attendances': {},
+                'staff': [],
+                'discussions': {},
+                'new_discussions': [],
+            },
+            'queued_at': datetime.now().isoformat(),
+            'from_batch': True  # Mark as batch processed
+        }
+
+        return sid, True, None
+
+    except Exception as e:
+        logger.error(f"Queue processing error for {filename}: {e}")
+        return None, False, str(e)
+
+def queue_worker():
+    """
+    Background worker that processes PDFs from the queue.
+    Runs in a separate thread.
+    """
+    global processing_status
+
+    while True:
+        try:
+            # Get next file from queue (blocks until available)
+            file_info = processing_queue.get(timeout=1)
+
+            if file_info is None:
+                # Poison pill - stop the worker
+                break
+
+            file_path = file_info['path']
+            filename = file_info['filename']
+
+            with processing_lock:
+                processing_status['current_file'] = filename
+                processing_status['current_index'] += 1
+                # Remove from pending
+                if filename in processing_status['pending']:
+                    processing_status['pending'].remove(filename)
+
+            logger.info(f"Queue processing: {filename} ({processing_status['current_index']}/{processing_status['total_files']})")
+
+            # Process the PDF
+            sid, success, error = process_pdf_for_queue(file_path, filename)
+
+            with processing_lock:
+                if success:
+                    processing_status['completed'].append({
+                        'sid': sid,
+                        'filename': filename,
+                        'status': 'ready',
+                        'processed_at': datetime.now().isoformat()
+                    })
+                else:
+                    processing_status['failed'].append({
+                        'filename': filename,
+                        'error': error,
+                        'failed_at': datetime.now().isoformat()
+                    })
+
+            processing_queue.task_done()
+
+        except queue.Empty:
+            # Check if we should stop
+            with processing_lock:
+                if processing_queue.empty() and not processing_status['pending']:
+                    processing_status['is_running'] = False
+                    processing_status['current_file'] = None
+                    processing_status['completed_at'] = datetime.now().isoformat()
+                    break
+        except Exception as e:
+            logger.error(f"Queue worker error: {e}")
+
+# Worker thread reference
+queue_worker_thread = None
 
 def get_sid():
     """Get session ID from request args or generate new one"""
@@ -174,14 +319,33 @@ def normalize_name(name):
     """Normalize a name for comparison - remove titles, extra spaces, quotes"""
     if not name:
         return ''
-    # Remove common titles
-    name = re.sub(r'עו["\'"\']+[דר]\s*', '', name)
-    name = re.sub(r'מר\s+', '', name)
-    name = re.sub(r'גב["\']?\s*', '', name)
-    name = re.sub(r'ד["\'"\']+ר\s*', '', name)
-    # Remove quotes and extra spaces
-    name = re.sub(r'[\'\"׳״]', '', name)
+
+    # Remove common Hebrew titles (with various quote styles)
+    # מר - Mr. (can appear as מר, 'מר, "מר)
+    name = re.sub(r'^["\'\u05f3\u05f4\u201c\u201d]*מר["\'\u05f3\u05f4\u201c\u201d\.\s]*', '', name)
+    # גברת / גב' - Mrs. (can appear as גב', גברת, 'גב)
+    name = re.sub(r'^["\'\u05f3\u05f4]*גב(?:רת)?["\'\u05f3\u05f4\.\s]*', '', name)
+    # עו"ד - Attorney (עורך דין / עורכת דין)
+    name = re.sub(r'^עו["\'\u05f3\u05f4]*[דר]["\'\u05f3\u05f4\.\s]*', '', name)
+    # ד"ר - Dr.
+    name = re.sub(r'^ד["\'\u05f3\u05f4]*ר["\'\u05f3\u05f4\.\s]*', '', name)
+    # רו"ח - CPA (רואה חשבון)
+    name = re.sub(r'^רו["\'\u05f3\u05f4]*ח["\'\u05f3\u05f4\.\s]*', '', name)
+    # פרופ' - Professor
+    name = re.sub(r'^פרופ["\'\u05f3\u05f4\.\s]*', '', name)
+    # מהנדס/ת
+    name = re.sub(r'^מהנדס(?:ת)?["\'\u05f3\u05f4\.\s]*', '', name)
+    # סגן/ית
+    name = re.sub(r'^סגנ?(?:ית)?["\'\u05f3\u05f4\.\s]+', '', name)
+    # ראש העיר / ראש המועצה
+    name = re.sub(r'^ראש\s+(?:העיר|המועצה|עיר|מועצה)["\'\u05f3\u05f4\.\s]*', '', name)
+
+    # Remove all types of quotes (Hebrew and English)
+    name = re.sub(r'[\'\"\u05f3\u05f4\u201c\u201d\u2018\u2019`´]', '', name)
+
+    # Remove extra spaces and trim
     name = re.sub(r'\s+', ' ', name).strip()
+
     return name
 
 
@@ -263,9 +427,10 @@ def match_attendance_lists(ocr_list, db_list):
     """
     Match OCR attendance list with DB attendance list.
     Also handles reversed names (common OCR issue with Hebrew).
+    Uses learned corrections from OCRLearningAgent to auto-match known names.
 
     Returns: (matched, ocr_only, db_only)
-    - matched: list of {'ocr_name': ..., 'db_name': ..., 'db_id': ..., 'was_reversed': bool}
+    - matched: list of {'ocr_name': ..., 'db_name': ..., 'db_id': ..., 'was_reversed': bool, 'auto_learned': bool}
     - ocr_only: list of {'name': ...}
     - db_only: list of {'id': ..., 'name': ...}
     """
@@ -277,23 +442,64 @@ def match_attendance_lists(ocr_list, db_list):
         ocr_name = ocr_item.get('name', '')
         found_match = False
 
-        for db_item in db_list:
-            if db_item['id'] in db_matched_ids:
-                continue
+        # === First: Check if we have a learned match for this name ===
+        if ocr_learning_agent:
+            learned_match = ocr_learning_agent.get_known_name_mapping(ocr_name)
+            if learned_match and learned_match.get('db_person_id'):
+                # Find the db item with this person_id
+                for db_item in db_list:
+                    if db_item['id'] not in db_matched_ids and db_item.get('person_id') == learned_match['db_person_id']:
+                        matched.append({
+                            'ocr_name': ocr_name,
+                            'db_name': db_item.get('name', learned_match['correct_name']),
+                            'db_id': db_item['id'],
+                            'was_reversed': learned_match.get('was_reversed', False),
+                            'auto_learned': True,
+                            'confidence': learned_match.get('confidence', 1.0)
+                        })
+                        db_matched_ids.add(db_item['id'])
+                        found_match = True
+                        break
 
-            db_name = db_item.get('name', '')
-            is_match, was_reversed, _ = names_match(ocr_name, db_name, return_details=True)
+            # Also try matching by correct_name if person_id didn't work
+            if not found_match and learned_match:
+                correct_name = learned_match.get('correct_name', '')
+                for db_item in db_list:
+                    if db_item['id'] not in db_matched_ids:
+                        db_name = db_item.get('name', '')
+                        if normalize_name(correct_name) == normalize_name(db_name):
+                            matched.append({
+                                'ocr_name': ocr_name,
+                                'db_name': db_name,
+                                'db_id': db_item['id'],
+                                'was_reversed': learned_match.get('was_reversed', False),
+                                'auto_learned': True,
+                                'confidence': learned_match.get('confidence', 1.0)
+                            })
+                            db_matched_ids.add(db_item['id'])
+                            found_match = True
+                            break
 
-            if is_match:
-                matched.append({
-                    'ocr_name': ocr_name,
-                    'db_name': db_name,
-                    'db_id': db_item['id'],
-                    'was_reversed': was_reversed  # Indicate if OCR name was reversed
-                })
-                db_matched_ids.add(db_item['id'])
-                found_match = True
-                break
+        # === Second: Regular matching ===
+        if not found_match:
+            for db_item in db_list:
+                if db_item['id'] in db_matched_ids:
+                    continue
+
+                db_name = db_item.get('name', '')
+                is_match, was_reversed, _ = names_match(ocr_name, db_name, return_details=True)
+
+                if is_match:
+                    matched.append({
+                        'ocr_name': ocr_name,
+                        'db_name': db_name,
+                        'db_id': db_item['id'],
+                        'was_reversed': was_reversed,
+                        'auto_learned': False
+                    })
+                    db_matched_ids.add(db_item['id'])
+                    found_match = True
+                    break
 
         if not found_match:
             ocr_only.append({'name': ocr_name})
@@ -470,6 +676,398 @@ def set_municipality():
         db_session.close()
 
 
+@app.route('/api/list_year_folders')
+def list_year_folders():
+    """List year subfolders in the source folder"""
+    try:
+        source_folder = config.SOURCE_PDF_FOLDER
+
+        if not os.path.exists(source_folder):
+            return jsonify({
+                'error': f'תיקיית המקור לא נמצאה: {source_folder}',
+                'years': []
+            })
+
+        # Get subfolders (excluding worked_on)
+        years = []
+        for f in os.listdir(source_folder):
+            full_path = os.path.join(source_folder, f)
+            if os.path.isdir(full_path) and f.lower() != 'worked_on':
+                # Count PDFs in this folder
+                pdf_count = len([p for p in os.listdir(full_path) if p.lower().endswith('.pdf')])
+                if pdf_count > 0:
+                    years.append({
+                        'name': f,
+                        'path': full_path,
+                        'pdf_count': pdf_count
+                    })
+
+        # Sort by name descending (newest year first)
+        years.sort(key=lambda x: x['name'], reverse=True)
+
+        return jsonify({
+            'success': True,
+            'source_folder': source_folder,
+            'years': years
+        })
+    except Exception as e:
+        logger.error(f"Error listing year folders: {e}")
+        return jsonify({'error': str(e), 'years': []}), 500
+
+
+@app.route('/api/list_source_pdfs')
+def list_source_pdfs():
+    """List PDF files from a year subfolder that haven't been processed yet"""
+    try:
+        base_folder = config.SOURCE_PDF_FOLDER
+        year = request.args.get('year')
+
+        # If year specified, use that subfolder
+        if year:
+            source_folder = os.path.join(base_folder, year)
+        else:
+            source_folder = base_folder
+
+        worked_on_folder = config.WORKED_ON_FOLDER
+
+        if not os.path.exists(source_folder):
+            return jsonify({
+                'error': f'תיקייה לא נמצאה: {source_folder}',
+                'files': []
+            })
+
+        # Get list of already processed files
+        processed_files = set()
+        if os.path.exists(worked_on_folder):
+            processed_files = {f.lower() for f in os.listdir(worked_on_folder) if f.lower().endswith('.pdf')}
+
+        # Get PDF files from source
+        pdf_files = []
+        for f in os.listdir(source_folder):
+            if f.lower().endswith('.pdf'):
+                full_path = os.path.join(source_folder, f)
+                if os.path.isfile(full_path):
+                    is_processed = f.lower() in processed_files
+                    file_stat = os.stat(full_path)
+                    pdf_files.append({
+                        'filename': f,
+                        'path': full_path,
+                        'size': file_stat.st_size,
+                        'size_mb': round(file_stat.st_size / (1024 * 1024), 2),
+                        'modified': datetime.fromtimestamp(file_stat.st_mtime).strftime('%d/%m/%Y %H:%M'),
+                        'is_processed': is_processed
+                    })
+
+        # Sort by filename descending
+        pdf_files.sort(key=lambda x: x['filename'], reverse=True)
+
+        return jsonify({
+            'success': True,
+            'source_folder': source_folder,
+            'year': year,
+            'files': pdf_files,
+            'total': len(pdf_files),
+            'unprocessed': len([f for f in pdf_files if not f['is_processed']])
+        })
+    except Exception as e:
+        logger.error(f"Error listing source PDFs: {e}")
+        return jsonify({'error': str(e), 'files': []}), 500
+
+
+# ==============================================================================
+# Batch Processing Queue API - ממשק API לתור עיבוד
+# ==============================================================================
+
+@app.route('/api/start_batch_processing', methods=['POST'])
+def start_batch_processing():
+    """
+    Start batch processing of all unprocessed PDFs in a year folder.
+    התחל עיבוד אצוות של כל הקבצים הממתינים בתיקיית שנה.
+    """
+    global queue_worker_thread, processing_status
+
+    year = request.json.get('year')
+    if not year:
+        return jsonify({'error': 'לא צוינה שנה'}), 400
+
+    with processing_lock:
+        if processing_status['is_running']:
+            return jsonify({
+                'error': 'עיבוד כבר רץ ברקע',
+                'current': processing_status['current_file'],
+                'progress': f"{processing_status['current_index']}/{processing_status['total_files']}"
+            }), 400
+
+    # Get list of unprocessed files
+    source_folder = os.path.join(config.SOURCE_PDF_FOLDER, year)
+    worked_on_folder = config.WORKED_ON_FOLDER
+
+    if not os.path.exists(source_folder):
+        return jsonify({'error': f'תיקייה לא נמצאה: {source_folder}'}), 404
+
+    # Get already processed files
+    processed_files = set()
+    if os.path.exists(worked_on_folder):
+        processed_files = {f.lower() for f in os.listdir(worked_on_folder) if f.lower().endswith('.pdf')}
+
+    # Get unprocessed PDFs
+    files_to_process = []
+    for f in os.listdir(source_folder):
+        if f.lower().endswith('.pdf') and f.lower() not in processed_files:
+            full_path = os.path.join(source_folder, f)
+            if os.path.isfile(full_path):
+                files_to_process.append({'filename': f, 'path': full_path})
+
+    if not files_to_process:
+        return jsonify({
+            'success': True,
+            'message': 'אין קבצים ממתינים לעיבוד',
+            'count': 0
+        })
+
+    # Sort by filename
+    files_to_process.sort(key=lambda x: x['filename'])
+
+    # Reset status
+    with processing_lock:
+        processing_status = {
+            'is_running': True,
+            'current_file': None,
+            'current_index': 0,
+            'total_files': len(files_to_process),
+            'completed': [],
+            'failed': [],
+            'pending': [f['filename'] for f in files_to_process],
+            'year': year,
+            'started_at': datetime.now().isoformat(),
+            'completed_at': None
+        }
+
+    # Clear the queue
+    while not processing_queue.empty():
+        try:
+            processing_queue.get_nowait()
+        except queue.Empty:
+            break
+
+    # Add files to queue
+    for file_info in files_to_process:
+        processing_queue.put(file_info)
+
+    # Start worker thread
+    queue_worker_thread = threading.Thread(target=queue_worker, daemon=True)
+    queue_worker_thread.start()
+
+    logger.info(f"Started batch processing for {year}: {len(files_to_process)} files")
+
+    return jsonify({
+        'success': True,
+        'message': f'התחיל עיבוד של {len(files_to_process)} קבצים',
+        'count': len(files_to_process),
+        'year': year,
+        'files': [f['filename'] for f in files_to_process]
+    })
+
+
+@app.route('/api/queue_status')
+def get_queue_status():
+    """
+    Get current status of the processing queue.
+    קבל את מצב תור העיבוד הנוכחי.
+    """
+    with processing_lock:
+        return jsonify({
+            'is_running': processing_status['is_running'],
+            'current_file': processing_status['current_file'],
+            'current_index': processing_status['current_index'],
+            'total_files': processing_status['total_files'],
+            'completed_count': len(processing_status['completed']),
+            'failed_count': len(processing_status['failed']),
+            'pending_count': len(processing_status['pending']),
+            'completed': processing_status['completed'],
+            'failed': processing_status['failed'],
+            'pending': processing_status['pending'],
+            'year': processing_status['year'],
+            'started_at': processing_status['started_at'],
+            'completed_at': processing_status['completed_at'],
+            'progress_percent': round(
+                (processing_status['current_index'] / processing_status['total_files'] * 100)
+                if processing_status['total_files'] > 0 else 0, 1
+            )
+        })
+
+
+@app.route('/api/clear_queue', methods=['POST'])
+def clear_queue():
+    """
+    Clear completed files from queue status.
+    נקה קבצים שהושלמו מהסטטוס.
+    """
+    global processing_status
+
+    with processing_lock:
+        if processing_status['is_running']:
+            return jsonify({'error': 'לא ניתן לנקות בזמן עיבוד'}), 400
+
+        processing_status = {
+            'is_running': False,
+            'current_file': None,
+            'current_index': 0,
+            'total_files': 0,
+            'completed': [],
+            'failed': [],
+            'pending': [],
+            'year': None,
+            'started_at': None,
+            'completed_at': None
+        }
+
+    return jsonify({'success': True, 'message': 'התור נוקה'})
+
+
+@app.route('/api/get_queued_data')
+def get_queued_data():
+    """
+    Get extracted data from a queued processing session.
+    קבל נתונים שהופקו מעיבוד בתור.
+    """
+    sid = request.args.get('sid')
+    if not sid:
+        return jsonify({'error': 'חסר מזהה session'}), 400
+
+    if sid not in session_data_store:
+        return jsonify({'error': 'לא נמצאו נתונים לסשן זה'}), 404
+
+    session_data = session_data_store[sid]
+    extracted = session_data.get('extracted', {})
+
+    return jsonify({
+        'success': True,
+        'meeting_info': extracted.get('meeting_info', {}),
+        'attendances_count': len(extracted.get('attendances', [])),
+        'staff_count': len([a for a in extracted.get('attendances', []) if a.get('status') == 'staff']),
+        'discussions_count': len(extracted.get('discussions', [])),
+        'filename': session_data.get('ocr_filename', ''),
+        'from_batch': session_data.get('from_batch', False)
+    })
+
+
+@app.route('/api/stop_queue', methods=['POST'])
+def stop_queue():
+    """
+    Stop the processing queue (current file will complete).
+    עצור את תור העיבוד (הקובץ הנוכחי יסתיים).
+    """
+    global processing_status
+
+    with processing_lock:
+        if not processing_status['is_running']:
+            return jsonify({'message': 'העיבוד לא רץ'})
+
+        # Clear pending items from queue
+        processing_status['pending'] = []
+
+    # Clear the queue
+    while not processing_queue.empty():
+        try:
+            processing_queue.get_nowait()
+            processing_queue.task_done()
+        except queue.Empty:
+            break
+
+    # Add poison pill to stop worker
+    processing_queue.put(None)
+
+    logger.info("Queue processing stopped by user")
+
+    return jsonify({
+        'success': True,
+        'message': 'העיבוד יעצור לאחר סיום הקובץ הנוכחי',
+        'completed': len(processing_status['completed'])
+    })
+
+
+@app.route('/process_local', methods=['POST'])
+def process_local_pdf():
+    """Process a PDF file directly from the source folder (no upload needed)"""
+    # Get sid for this tab's session data
+    sid = request.json.get('sid') or get_sid()
+    if not sid:
+        return jsonify({'error': 'חסר מזהה session'}), 400
+    session_data, sid = get_session_data(sid)
+
+    file_path = request.json.get('file_path')
+    if not file_path:
+        return jsonify({'error': 'לא צוין נתיב קובץ'}), 400
+
+    # Security: Validate path is within allowed source folder (prevent path traversal)
+    try:
+        abs_file_path = os.path.abspath(file_path)
+        abs_source_folder = os.path.abspath(config.SOURCE_PDF_FOLDER)
+        if not abs_file_path.startswith(abs_source_folder):
+            logger.warning(f"Path traversal attempt blocked: {file_path}")
+            return jsonify({'error': 'נתיב קובץ לא חוקי'}), 403
+    except Exception as e:
+        logger.error(f"Path validation error: {e}")
+        return jsonify({'error': 'שגיאה באימות נתיב'}), 400
+
+    if not os.path.exists(file_path):
+        return jsonify({'error': f'הקובץ לא נמצא: {file_path}'}), 404
+
+    if not file_path.lower().endswith('.pdf'):
+        return jsonify({'error': 'יש לבחור קובץ PDF'}), 400
+
+    filename = os.path.basename(file_path)
+
+    try:
+        # Extract text from PDF (directly from source - no copy needed)
+        ocr_text = extract_text_from_pdf(file_path)
+
+        # Extract protocol data
+        extracted_data = parse_protocol_text(ocr_text)
+
+        # Try to extract municipality name from OCR text
+        detected_municipality = extract_municipality_name(ocr_text)
+        extracted_data['detected_municipality'] = detected_municipality
+
+        # Auto-classify each discussion
+        for disc in extracted_data.get('discussions', []):
+            try:
+                title = disc.get('content', '') or disc.get('title', '')
+                classification = classify_discussion_admin_category(title)
+                disc['admin_category_code'] = classification.get('category_code')
+                disc['admin_category_confidence'] = classification.get('confidence', 0)
+                disc['admin_category_auto'] = True
+            except Exception as e:
+                logger.warning(f"Failed to classify discussion: {e}")
+                disc['admin_category_code'] = None
+                disc['admin_category_confidence'] = 0
+                disc['admin_category_auto'] = False
+
+        # Store in session - use original path directly (no upload copy)
+        session_data['original_pdf_path'] = file_path  # This is the key - original location
+        session_data['pdf_path'] = file_path  # Same path - we'll move from here
+        session_data['ocr_filename'] = filename
+        session_data['extracted'] = extracted_data
+        session_data['ocr_text'] = ocr_text
+
+        logger.info(f"Processed local PDF: {file_path} for sid={sid}")
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'file_path': file_path,
+            'meeting_info': extracted_data.get('meeting_info', {}),
+            'attendances_count': len(extracted_data.get('attendances', [])),
+            'staff_count': len(extracted_data.get('staff', [])),
+            'discussions_count': len(extracted_data.get('discussions', [])),
+            'detected_municipality': detected_municipality
+        })
+    except Exception as e:
+        logger.error(f"Error processing local PDF: {e}")
+        return jsonify({'error': f'שגיאה בעיבוד הקובץ: {str(e)}'}), 500
+
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     """Handle PDF upload and OCR extraction"""
@@ -544,6 +1142,12 @@ def upload_pdf():
         session_data['ocr_filename'] = filename
         session_data['extracted'] = extracted_data
         session_data['ocr_text'] = ocr_text
+
+        # Store original path if provided (for moving file at end of validation)
+        original_path = request.form.get('original_path', '').strip()
+        if original_path:
+            session_data['original_pdf_path'] = original_path
+            logger.info(f"Original PDF path stored: {original_path}")
 
         return jsonify({
             'success': True,
@@ -899,18 +1503,44 @@ def record_correction():
     try:
         from ocr_learning_agent import record_user_correction
         data = request.json
-        field_type = data.get('field_type', 'word')
+
+        # Support both old format (field_type, correct_value) and new format (correction_type, corrected_value)
+        field_type = data.get('field_type') or data.get('correction_type', 'word')
         ocr_value = data.get('ocr_value', '')
-        correct_value = data.get('correct_value', '')
+        correct_value = data.get('correct_value') or data.get('corrected_value', '')
         meeting_id = session.get('meeting_id')
 
+        # Additional context for name matching
+        context = data.get('context')
+        person_id = data.get('person_id')
+
         if ocr_value and correct_value and ocr_value != correct_value:
-            record_user_correction(field_type, ocr_value, correct_value, meeting_id)
+            # Enhanced logging for name matches - use the specialized method
+            if field_type == 'name_match' and ocr_learning_agent:
+                ocr_learning_agent.record_name_match(
+                    ocr_name=ocr_value,
+                    correct_name=correct_value,
+                    db_person_id=person_id
+                )
+                logger.info(f"Recorded name match: '{ocr_value}' -> '{correct_value}' (person_id={person_id})")
+
+            # Enhanced logging for role corrections
+            elif field_type == 'role' and ocr_learning_agent:
+                ocr_learning_agent.record_role_correction(
+                    ocr_role=ocr_value,
+                    correct_role=correct_value
+                )
+                logger.info(f"Recorded role correction: '{ocr_value}' -> '{correct_value}'")
+
+            else:
+                record_user_correction(field_type, ocr_value, correct_value, meeting_id)
+
             return jsonify({'success': True, 'message': 'התיקון נשמר ללמידה'})
         return jsonify({'success': True, 'message': 'אין תיקון לשמור'})
     except ImportError:
         return jsonify({'success': False, 'message': 'מערכת הלמידה אינה זמינה'})
     except Exception as e:
+        logger.error(f"Error recording correction: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1582,6 +2212,14 @@ def finalize_validation():
         session_data['pending_changes'] = {}
         session_data['validation_complete'] = True
 
+        # Remove from queue completed list (if this was from batch processing)
+        if session_data.get('from_batch'):
+            with processing_lock:
+                processing_status['completed'] = [
+                    f for f in processing_status['completed']
+                    if f.get('sid') != sid
+                ]
+
         # Save learning data
         if ocr_learning_agent:
             try:
@@ -1590,9 +2228,69 @@ def finalize_validation():
                 logger.warning(f"Failed to save learning data: {e}")
 
         logger.info(f"Finalized validation for meeting {meeting_id}")
+
+        # === Move PDF to worked_on folder ===
+        pdf_moved = False
+        pdf_message = ''
+
+        # Prefer original path (from user's computer) over uploaded path
+        original_path = session_data.get('original_pdf_path')
+        pdf_path = session_data.get('pdf_path') or session.get('pdf_path')
+        pdf_filename = session_data.get('ocr_filename') or session.get('ocr_filename')
+
+        # Determine source path - use original if exists, otherwise use uploaded
+        source_path = None
+        if original_path and os.path.exists(original_path):
+            source_path = original_path
+            logger.info(f"Using original path for move: {original_path}")
+        elif pdf_path and os.path.exists(pdf_path):
+            source_path = pdf_path
+            logger.info(f"Using uploaded path for move: {pdf_path}")
+
+        if source_path:
+            try:
+                import shutil
+                # Use the configured worked_on folder
+                worked_on_folder = config.WORKED_ON_FOLDER
+                os.makedirs(worked_on_folder, exist_ok=True)
+
+                # Use original filename from source path
+                source_filename = os.path.basename(source_path)
+                new_path = os.path.join(worked_on_folder, source_filename)
+
+                # If file exists, add timestamp
+                if os.path.exists(new_path):
+                    name, ext = os.path.splitext(source_filename)
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    new_filename = f'{name}_{timestamp}{ext}'
+                    new_path = os.path.join(worked_on_folder, new_filename)
+
+                shutil.move(source_path, new_path)
+                pdf_moved = True
+                pdf_message = f'הקובץ הועבר ל: {new_path}'
+                logger.info(f"Moved PDF from {source_path} to: {new_path}")
+
+                # Also delete uploaded copy if we moved from original
+                if original_path and pdf_path and os.path.exists(pdf_path) and pdf_path != source_path:
+                    try:
+                        os.remove(pdf_path)
+                        logger.info(f"Deleted uploaded copy: {pdf_path}")
+                    except Exception as del_err:
+                        logger.warning(f"Failed to delete uploaded copy: {del_err}")
+
+                # Clear session paths
+                session_data.pop('pdf_path', None)
+                session_data.pop('original_pdf_path', None)
+                session.pop('pdf_path', None)
+            except Exception as e:
+                logger.warning(f"Failed to move PDF: {e}")
+                pdf_message = f'שגיאה בהעברת הקובץ: {str(e)}'
+
         return jsonify({
             'success': True,
-            'message': 'כל השינויים נשמרו בהצלחה לבסיס הנתונים'
+            'message': 'כל השינויים נשמרו בהצלחה לבסיס הנתונים',
+            'pdf_moved': pdf_moved,
+            'pdf_message': pdf_message
         })
 
     except Exception as e:
@@ -1640,19 +2338,29 @@ def pending_count():
     })
 
 
-@app.route('/api/move_to_processed', methods=['POST'])
+@app.route('/api/move_to_processed', methods=['GET', 'POST'])
 def move_to_processed():
     """Move the processed PDF to 'worked_on' folder (same as ocr_validation_module)"""
+    # Get sid from request (GET or POST)
+    sid = request.args.get('sid') or (request.json.get('sid') if request.is_json else None)
+
     pdf_path = session.get('pdf_path')
     pdf_filename = session.get('ocr_filename')
 
     logger.debug(f"[move_to_processed] pdf_path={pdf_path}, pdf_filename={pdf_filename}")
 
+    # If no PDF path, just redirect to index (data was saved successfully, just no file to move)
     if not pdf_path:
-        return jsonify({'error': 'נתיב קובץ לא נמצא בסשן', 'debug': 'pdf_path is None'}), 404
+        if request.method == 'GET':
+            flash('הנתונים נשמרו בהצלחה!', 'success')
+            return redirect(url_for('index'))
+        return jsonify({'success': True, 'message': 'הנתונים נשמרו (אין קובץ להעברה)'})
 
     if not os.path.exists(pdf_path):
-        return jsonify({'error': f'קובץ לא נמצא בנתיב: {pdf_path}', 'debug': 'file does not exist'}), 404
+        if request.method == 'GET':
+            flash('הנתונים נשמרו בהצלחה! (קובץ PDF לא נמצא להעברה)', 'success')
+            return redirect(url_for('index'))
+        return jsonify({'success': True, 'message': 'הנתונים נשמרו (קובץ לא נמצא)'})
 
     # Move to protocols_pdf/worked_on/ folder (not uploads/worked_on/)
     protocols_folder = os.path.join(os.path.dirname(__file__), 'protocols_pdf')
@@ -1678,12 +2386,20 @@ def move_to_processed():
         # Clear session pdf_path
         session.pop('pdf_path', None)
 
+        # If GET request (redirect from finalize), redirect to index with success message
+        if request.method == 'GET':
+            flash(f'הקובץ הועבר ל: worked_on/{os.path.basename(new_path)}', 'success')
+            return redirect(url_for('index'))
+
         return jsonify({
             'success': True,
             'new_path': new_path,
             'message': f'הקובץ הועבר ל: worked_on/{os.path.basename(new_path)}'
         })
     except Exception as e:
+        if request.method == 'GET':
+            flash(f'שגיאה בהעברת הקובץ: {str(e)}', 'error')
+            return redirect(url_for('index'))
         return jsonify({'error': f'שגיאה בהעברת הקובץ: {str(e)}'}), 500
 
 

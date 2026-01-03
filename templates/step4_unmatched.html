@@ -451,16 +451,10 @@
                         <i class="bi bi-arrow-right"></i>
                         חזור להשוואת שדות
                     </a>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary" id="moveToProcessedBtn" onclick="moveToProcessed()">
-                            <i class="bi bi-folder-symlink"></i>
-                            העבר ל-worked_on
-                        </button>
-                        <button class="btn btn-success btn-lg" onclick="finishValidation()">
-                            <i class="bi bi-check-all"></i>
-                            סיים ולידציה
-                        </button>
-                    </div>
+                    <button class="btn btn-success btn-lg" onclick="finishValidation()">
+                        <i class="bi bi-check-all"></i>
+                        סיים ולידציה
+                    </button>
                 </div>
             </div>
         </div>
@@ -716,10 +710,8 @@ async function moveToProcessed() {
 }
 
 function finishValidation() {
-    showToast('הולידציה הסתיימה בהצלחה!');
-    setTimeout(() => {
-        window.location.href = '/';
-    }, 1500);
+    // Navigate to step 5 for final review and save
+    window.location.href = '/step/5?sid=' + SID;
 }
 
 // Load admin categories for OCR items

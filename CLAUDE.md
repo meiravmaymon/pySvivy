@@ -461,6 +461,13 @@ alembic history
 
 ## Recent Updates (January 2026)
 
+### v2.2 - Batch Processing & Learning System
+- **Batch Processing Queue**: Process all PDFs in a year folder with background threading
+- **OCR Learning Agent**: Auto-learns from user corrections (names, roles) and applies fixes automatically
+- **Hebrew Title Recognition**: Handles "מר", "גב'" prefixes in name matching
+- **Security Hardening**: Path traversal protection, improved SECRET_KEY handling
+- **Queue Status UI**: Real-time progress tracking with completion panel
+
 ### v2.1 - OCR Validation Web App Improvements
 - **Atomic Saves**: Changes buffered in session until explicit finalization
 - **Multi-tab Support**: Each browser tab gets unique session ID (sid)
@@ -469,7 +476,13 @@ alembic history
 - **UI Improvements**: Reverse buttons for names/roles, visual indicators for reversed matches
 - **5-Step Workflow**: Meeting → Attendance → Staff → Discussions → Finalize
 
-### Key Files Changed
+### Key Files Changed (v2.2)
+- `ocr_web_app.py` - Batch processing queue, path validation, enhanced name matching
+- `ocr_learning_agent.py` - Name/role learning functions (`get_known_name_mapping`, `record_name_match`)
+- `templates/index.html` - Queue status panel, batch processing UI
+- `config.py` - Improved SECRET_KEY, version update
+
+### Key Files Changed (v2.1)
 - `ocr_web_app.py` - Session management, atomic saves, improved name matching
 - `templates/step2_attendance.html` - Reversed match indicators
 - `templates/step3_staff.html` - Manual text reversal buttons
@@ -479,5 +492,6 @@ alembic history
 ---
 
 **Municipality**: Yehud-Monosson (יהוד-מונוסון)
-**Version**: 2.1
+**Version**: 2.2
+**Status**: 🚧 Under Active Development
 **Last Updated**: January 2026

@@ -1,5 +1,14 @@
 """
 OCR-based protocol extraction with Hebrew support
+
+This module provides OCR functionality for extracting data from
+Hebrew municipal protocol PDFs.
+
+Enhanced in v2.1 with:
+- Section detection for better structure parsing
+- Municipality-specific format handlers
+- LLM routing (Regex -> Ollama -> Gemini)
+- Improved Hebrew text normalization
 """
 import os
 import sys
@@ -19,6 +28,31 @@ def debug_print(*args, **kwargs):
     """Print only if DEBUG is True"""
     if DEBUG:
         print(*args, **kwargs)
+
+# =============================================================================
+# Import enhanced OCR modules (v2.1)
+# =============================================================================
+try:
+    from ocr import (
+        # Text utilities
+        normalize_final_letters as ocr_normalize_final_letters,
+        fix_reversed_numbers as ocr_fix_reversed_numbers,
+        fix_reversed_short_numbers as ocr_fix_reversed_short_numbers,
+        reverse_hebrew_text as ocr_reverse_hebrew_text,
+        normalize_hebrew_text,
+        detect_reversed_text,
+        similarity_score,
+        # Section detection
+        detect_sections,
+        SectionType,
+    )
+    from ocr.formats import detect_format
+    from ocr.llm_router import LLMRouter, ExtractionType, RouterConfig
+    OCR_ENHANCED = True
+    debug_print("[OK] Enhanced OCR modules loaded (v2.1)")
+except ImportError as e:
+    debug_print(f"WARNING: Enhanced OCR modules not available: {e}")
+    OCR_ENHANCED = False
 
 # Import LLM helper for fallback extraction and summary generation
 try:
@@ -43,6 +77,25 @@ except ImportError:
     print("WARNING: OCRLearningAgent not available, learning disabled")
     _learning_agent = None
     LEARNING_AVAILABLE = False
+
+# Initialize LLM Router if available
+_llm_router = None
+def get_llm_router():
+    """Get or create LLM router singleton."""
+    global _llm_router
+    if _llm_router is None and OCR_ENHANCED:
+        try:
+            from config import config
+            router_config = RouterConfig(
+                ollama_host=getattr(config, 'OLLAMA_HOST', 'http://localhost:11434'),
+                ollama_model=getattr(config, 'OLLAMA_MODEL', 'gemma3:1b'),
+                gemini_api_key=getattr(config, 'GEMINI_API_KEY', None),
+            )
+            _llm_router = LLMRouter(router_config)
+            debug_print(f"[OK] LLM Router initialized (Ollama: {_llm_router.is_ollama_available()}, Gemini: {_llm_router.is_gemini_available()})")
+        except Exception as e:
+            debug_print(f"WARNING: Could not initialize LLM Router: {e}")
+    return _llm_router
 
 def apply_learned_corrections(text: str, field_type: str = 'word') -> str:
     """Apply learned corrections from OCR Learning Agent"""
@@ -648,11 +701,16 @@ def normalize_final_letters(text):
     נרמול אותיות סופיות לאחר היפוך טקסט.
     כשמהפכים טקסט עברי, האותיות הסופיות עוברות למקום הלא נכון.
     פונקציה זו מתקנת: ם→מ (באמצע), מ→ם (בסוף)
+
+    Note: Uses enhanced version from ocr.text_utils if available.
     """
+    if OCR_ENHANCED:
+        return ocr_normalize_final_letters(text)
+
+    # Fallback implementation
     if not text:
         return text
 
-    # מיפוי אותיות רגילות לסופיות ולהפך
     final_to_regular = {'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ', 'ך': 'כ'}
     regular_to_final = {'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ', 'כ': 'ך'}
 
@@ -664,17 +722,14 @@ def normalize_final_letters(text):
             result.append(word)
             continue
 
-        # עבור על כל תו במילה
         new_word = list(word)
         for i, char in enumerate(word):
             is_last = (i == len(word) - 1)
 
             if is_last:
-                # תו אחרון - צריך להיות סופית אם רלוונטי
                 if char in regular_to_final:
                     new_word[i] = regular_to_final[char]
             else:
-                # לא אחרון - לא יכול להיות סופית
                 if char in final_to_regular:
                     new_word[i] = final_to_regular[char]
 
@@ -688,36 +743,23 @@ def fix_reversed_numbers(text):
     תיקון מספרים הפוכים בטקסט עברי.
     OCR של עברית לפעמים קורא מספרים משמאל לימין במקום מימין לשמאל.
 
-    דוגמאות:
-    - "000,012" → "210,000"
-    - "000,09" → "90,000"
-    - "000,003" → "300,000"
-
-    זיהוי מספר הפוך:
-    - מתחיל ב-0
-    - יש פסיק אחרי 3 ספרות מההתחלה (למשל 000,)
-    - הספרות אחרי הפסיק אינן כולן 0
+    Note: Uses enhanced version from ocr.text_utils if available.
     """
+    if OCR_ENHANCED:
+        return ocr_fix_reversed_numbers(text)
+
+    # Fallback implementation
     if not text:
         return text
 
-    import re
-
     def reverse_number(match):
         num_str = match.group(0)
-
-        # הסר פסיקים
         digits_only = num_str.replace(',', '')
 
-        # בדוק אם מתחיל ב-0 ולא כולו אפסים
         if digits_only.startswith('0') and not all(c == '0' for c in digits_only):
-            # הפוך את הספרות
             reversed_digits = digits_only[::-1]
-
-            # הסר אפסים מובילים
             reversed_digits = reversed_digits.lstrip('0') or '0'
 
-            # הוסף פסיקים כל 3 ספרות מימין
             result = ''
             for i, digit in enumerate(reversed(reversed_digits)):
                 if i > 0 and i % 3 == 0:
@@ -728,10 +770,7 @@ def fix_reversed_numbers(text):
 
         return num_str
 
-    # מצא מספרים עם פסיקים (פורמט: 000,XXX או XXX,000 וכו')
-    # מספר הפוך נראה כמו: 000,012 (מתחיל ב-000,)
     pattern = r'\b0{1,3},\d{1,3}(?:,\d{3})*\b'
-
     result = re.sub(pattern, reverse_number, text)
 
     return result
@@ -754,7 +793,20 @@ def detect_document_direction(text, sample_size=500):
         - 'direction': 'normal' או 'reversed'
         - 'confidence': רמת ביטחון (0-1)
         - 'indicators': רשימת אינדיקטורים שנמצאו
+
+    Note: Uses enhanced detect_reversed_text from ocr.text_utils if available.
     """
+    # Use enhanced detection if available
+    if OCR_ENHANCED:
+        is_reversed, confidence = detect_reversed_text(text)
+        return {
+            'direction': 'reversed' if is_reversed else 'normal',
+            'confidence': confidence,
+            'indicators': ['Enhanced OCR detection'],
+            'scores': {'normal': 1 - confidence if is_reversed else confidence,
+                      'reversed': confidence if is_reversed else 1 - confidence}
+        }
+
     if not text or len(text) < 100:
         return {'direction': 'normal', 'confidence': 0.5, 'indicators': []}
 
@@ -1223,8 +1275,129 @@ def apply_grouped_vote(discussions, grouped_vote_info, protocol_text):
     return discussions
 
 
+def extract_with_section_detection(text):
+    """
+    חילוץ נתונים מפרוטוקול באמצעות זיהוי סקציות.
+
+    גישה חדשה (v2.1) שמשתמשת ב-Section Detection לזיהוי
+    גבולות הסקציות לפני החילוץ.
+
+    Args:
+        text: הטקסט המלא של הפרוטוקול
+
+    Returns:
+        dict עם נתונים מובנים לפי סקציות
+    """
+    if not OCR_ENHANCED:
+        debug_print("WARNING: Enhanced OCR not available, using fallback")
+        return None
+
+    result = {
+        'sections_detected': {},
+        'format_detected': None,
+        'header': None,
+        'attendees': [],
+        'absent': [],
+        'staff': [],
+        'discussions': [],
+    }
+
+    # זיהוי סקציות
+    detection = detect_sections(text)
+    result['document_reversed'] = detection.document_reversed
+    result['detection_confidence'] = detection.overall_confidence
+
+    debug_print(f"Section detection: {len(detection.sections)} sections found, "
+               f"reversed={detection.document_reversed}, confidence={detection.overall_confidence:.2f}")
+
+    # זיהוי פורמט הרשות
+    try:
+        fmt = detect_format(text)
+        result['format_detected'] = fmt.municipality_name_he
+        debug_print(f"Format detected: {fmt.municipality_name_he}")
+    except Exception as e:
+        debug_print(f"Format detection error: {e}")
+        fmt = None
+
+    # חילוץ כותרת
+    if SectionType.HEADER in detection.sections:
+        header_section = detection.sections[SectionType.HEADER]
+        result['sections_detected']['header'] = {
+            'start': header_section.start_pos,
+            'end': header_section.end_pos,
+            'confidence': header_section.confidence,
+        }
+        if fmt:
+            try:
+                result['header'] = fmt.extract_header(header_section.text)
+            except Exception as e:
+                debug_print(f"Header extraction error: {e}")
+
+    # חילוץ נוכחים
+    if SectionType.ATTENDEES in detection.sections:
+        attendees_section = detection.sections[SectionType.ATTENDEES]
+        result['sections_detected']['attendees'] = {
+            'start': attendees_section.start_pos,
+            'end': attendees_section.end_pos,
+            'confidence': attendees_section.confidence,
+        }
+        if fmt:
+            try:
+                result['attendees'] = fmt.extract_attendees(attendees_section.text)
+            except Exception as e:
+                debug_print(f"Attendees extraction error: {e}")
+
+    # חילוץ נעדרים
+    if SectionType.ABSENT in detection.sections:
+        absent_section = detection.sections[SectionType.ABSENT]
+        result['sections_detected']['absent'] = {
+            'start': absent_section.start_pos,
+            'end': absent_section.end_pos,
+            'confidence': absent_section.confidence,
+        }
+        if fmt:
+            try:
+                result['absent'] = fmt.extract_absent(absent_section.text)
+            except Exception as e:
+                debug_print(f"Absent extraction error: {e}")
+
+    # חילוץ סגל
+    if SectionType.STAFF in detection.sections:
+        staff_section = detection.sections[SectionType.STAFF]
+        result['sections_detected']['staff'] = {
+            'start': staff_section.start_pos,
+            'end': staff_section.end_pos,
+            'confidence': staff_section.confidence,
+        }
+        if fmt:
+            try:
+                result['staff'] = fmt.extract_staff(staff_section.text)
+            except Exception as e:
+                debug_print(f"Staff extraction error: {e}")
+
+    # חילוץ דיונים
+    if SectionType.DISCUSSIONS in detection.sections:
+        discussions_section = detection.sections[SectionType.DISCUSSIONS]
+        result['sections_detected']['discussions'] = {
+            'start': discussions_section.start_pos,
+            'end': discussions_section.end_pos,
+            'confidence': discussions_section.confidence,
+        }
+        if fmt:
+            try:
+                result['discussions'] = fmt.extract_discussions(discussions_section.text)
+            except Exception as e:
+                debug_print(f"Discussions extraction error: {e}")
+
+    return result
+
+
 def parse_protocol_text(text):
-    """Parse extracted text to find meeting data"""
+    """
+    Parse extracted text to find meeting data.
+
+    Enhanced in v2.1 to optionally use section detection for better accuracy.
+    """
     extracted_data = {
         'meeting_info': {},
         'attendances': [],

@@ -295,6 +295,7 @@ document.getElementById('saveMeetingInfo').addEventListener('click', async funct
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
+                sid: getSid(),
                 meeting_id: {{ db_meeting.id }},
                 meeting_no: selectedValues.meeting_no,
                 date: selectedValues.date,
@@ -303,7 +304,8 @@ document.getElementById('saveMeetingInfo').addEventListener('click', async funct
         });
         const result = await response.json();
         if (result.success) {
-            showToast('פרטי הישיבה נשמרו בהצלחה');
+            showToast('פרטי הישיבה נשמרו (ממתינים לאישור סופי)', 'success');
+            updatePendingIndicator();  // Update the pending count in navbar
         } else {
             showToast(result.error || 'שגיאה בשמירה', 'danger');
         }

@@ -38,22 +38,120 @@
         <div class="card">
             <div class="card-header">
                 <h4 class="mb-0">
-                    <i class="bi bi-upload"></i>
-                    שלב 1: העלאת קובץ PDF
+                    <i class="bi bi-file-pdf"></i>
+                    שלב 1: בחירת קובץ PDF
                 </h4>
             </div>
             <div class="card-body">
-                <form id="uploadForm" enctype="multipart/form-data">
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">בחר קובץ פרוטוקול (PDF)</label>
-                        <input type="file" class="form-control form-control-lg" id="pdfFile" name="pdf_file" accept=".pdf" required>
-                        <div class="form-text">גודל מקסימלי: 50MB</div>
+                <!-- Tab navigation -->
+                <ul class="nav nav-tabs mb-3" id="pdfSourceTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="local-tab" data-bs-toggle="tab" data-bs-target="#localFiles"
+                                type="button" role="tab">
+                            <i class="bi bi-folder2-open"></i>
+                            מתיקיית המקור
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#uploadFile"
+                                type="button" role="tab">
+                            <i class="bi bi-cloud-upload"></i>
+                            העלאה ידנית
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="pdfSourceTabContent">
+                    <!-- Tab 1: Local Files -->
+                    <div class="tab-pane fade show active" id="localFiles" role="tabpanel">
+                        <!-- Year selector -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <label class="fw-bold mb-0">שנה:</label>
+                                <select class="form-select form-select-sm" id="yearSelect" style="width: auto;">
+                                    <option value="">טוען...</option>
+                                </select>
+                                <span class="badge bg-info" id="yearFileCount"></span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success btn-sm" id="batchProcessBtn" onclick="startBatchProcessing()">
+                                    <i class="bi bi-collection-play"></i> עבד את כל הממתינים
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="refreshFileList()">
+                                    <i class="bi bi-arrow-clockwise"></i> רענן
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Queue Status Panel -->
+                        <div id="queueStatusPanel" class="card mb-3" style="display: none;">
+                            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-2">
+                                <span><i class="bi bi-hourglass-split"></i> תור עיבוד</span>
+                                <span class="badge bg-light text-dark" id="queueProgress">0/0</span>
+                            </div>
+                            <div class="card-body py-2">
+                                <!-- Progress bar -->
+                                <div class="progress mb-2" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="queueProgressBar"
+                                         role="progressbar" style="width: 0%">0%</div>
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span id="queueCurrentFile" class="text-muted"></span>
+                                    <div>
+                                        <span class="badge bg-success" id="queueCompletedCount">0 הושלמו</span>
+                                        <span class="badge bg-danger" id="queueFailedCount" style="display: none;">0 נכשלו</span>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="mt-2 d-flex gap-2" id="queueActions">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="stopQueue()" id="stopQueueBtn">
+                                        <i class="bi bi-stop-fill"></i> עצור
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Completed files ready for validation -->
+                        <div id="completedFilesPanel" class="card mb-3 border-success" style="display: none;">
+                            <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-check-circle"></i> מוכנים לולידציה</span>
+                                <button class="btn btn-sm btn-light" onclick="clearQueue()">
+                                    <i class="bi bi-trash"></i> נקה
+                                </button>
+                            </div>
+                            <div class="card-body py-2">
+                                <div id="completedFilesList" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-muted small mb-2" id="sourceFolderPath"></div>
+
+                        <div id="fileListContainer">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">טוען...</p>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary btn-lg w-100">
-                        <i class="bi bi-cloud-upload"></i>
-                        העלה וחלץ נתונים
-                    </button>
-                </form>
+
+                    <!-- Tab 2: Manual Upload -->
+                    <div class="tab-pane fade" id="uploadFile" role="tabpanel">
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">בחר קובץ פרוטוקול (PDF)</label>
+                                <input type="file" class="form-control form-control-lg" id="pdfFile" name="pdf_file" accept=".pdf" required>
+                                <div class="form-text">גודל מקסימלי: 50MB</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-cloud-upload"></i>
+                                העלה וחלץ נתונים
+                            </button>
+                        </form>
+                    </div>
+                </div>
 
                 <div id="extractionResult" class="mt-4" style="display: none;">
                     <div class="alert alert-success">
@@ -141,6 +239,489 @@ function addSidToUrl(url) {
     const separator = url.includes('?') ? '&' : '?';
     return url + separator + 'sid=' + SID;
 }
+
+// ========== LOCAL FILE PICKER ==========
+
+let selectedYear = null;
+
+// Load years and files on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadYearFolders();
+
+    // Year selection handler
+    document.getElementById('yearSelect').addEventListener('change', function() {
+        selectedYear = this.value;
+        loadSourceFiles(selectedYear);
+    });
+});
+
+async function loadYearFolders() {
+    try {
+        const response = await fetch('/api/list_year_folders');
+        const data = await response.json();
+
+        const yearSelect = document.getElementById('yearSelect');
+
+        if (data.error) {
+            yearSelect.innerHTML = '<option value="">שגיאה בטעינה</option>';
+            document.getElementById('fileListContainer').innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    ${data.error}
+                </div>
+            `;
+            return;
+        }
+
+        if (data.years.length === 0) {
+            yearSelect.innerHTML = '<option value="">אין תיקיות שנה</option>';
+            document.getElementById('fileListContainer').innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    לא נמצאו תיקיות משנה עם קבצי PDF
+                </div>
+            `;
+            return;
+        }
+
+        // Build year options
+        yearSelect.innerHTML = data.years.map(year =>
+            `<option value="${year.name}">${year.name} (${year.pdf_count} קבצים)</option>`
+        ).join('');
+
+        // Select first year and load its files
+        selectedYear = data.years[0].name;
+        loadSourceFiles(selectedYear);
+
+    } catch (error) {
+        console.error('Error loading year folders:', error);
+        document.getElementById('yearSelect').innerHTML = '<option value="">שגיאה</option>';
+    }
+}
+
+async function loadSourceFiles(year) {
+    const container = document.getElementById('fileListContainer');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">טוען קבצים...</p>
+        </div>
+    `;
+
+    try {
+        const url = year ? `/api/list_source_pdfs?year=${encodeURIComponent(year)}` : '/api/list_source_pdfs';
+        const response = await fetch(url);
+        const data = await response.json();
+
+        const folderPath = document.getElementById('sourceFolderPath');
+        const fileCount = document.getElementById('yearFileCount');
+
+        if (data.error) {
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    ${data.error}
+                </div>
+            `;
+            return;
+        }
+
+        folderPath.textContent = data.source_folder;
+        fileCount.textContent = `${data.unprocessed} ממתינים מתוך ${data.total}`;
+
+        if (data.files.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    אין קבצי PDF בתיקייה זו
+                </div>
+            `;
+            return;
+        }
+
+        // Build file list
+        let html = `<div class="list-group" style="max-height: 350px; overflow-y: auto;">`;
+
+        data.files.forEach(file => {
+            const isProcessed = file.is_processed;
+            const badgeClass = isProcessed ? 'bg-success' : 'bg-warning text-dark';
+            const badgeText = isProcessed ? 'עובד' : 'ממתין';
+            const btnClass = isProcessed ? 'btn-outline-secondary' : 'btn-primary';
+            const rowClass = isProcessed ? 'list-group-item-light' : '';
+
+            html += `
+                <div class="list-group-item ${rowClass} d-flex justify-content-between align-items-center py-2">
+                    <div>
+                        <i class="bi bi-file-pdf text-danger"></i>
+                        <strong>${file.filename}</strong>
+                        <small class="text-muted ms-2">${file.size_mb} MB</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge ${badgeClass}">${badgeText}</span>
+                        <button class="btn btn-sm ${btnClass}" onclick="processLocalFile('${file.path.replace(/\\/g, '\\\\')}')">
+                            <i class="bi bi-play-fill"></i> עבד
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error('Error loading source files:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle"></i>
+                שגיאה בטעינת רשימת הקבצים
+            </div>
+        `;
+    }
+}
+
+function refreshFileList() {
+    loadSourceFiles(selectedYear);
+}
+
+async function processLocalFile(filePath) {
+    showLoading('מעבד את קובץ ה-PDF...', true);
+
+    // Progress simulation
+    let stepIndex = 0;
+    const progressSteps = [
+        { pct: 10, text: 'קורא את הקובץ...' },
+        { pct: 25, text: 'ממיר PDF לתמונות...' },
+        { pct: 50, text: 'מריץ OCR (זיהוי תווים)...' },
+        { pct: 75, text: 'מחלץ נתונים מהטקסט...' },
+        { pct: 90, text: 'מסיים עיבוד...' }
+    ];
+
+    const progressInterval = setInterval(() => {
+        if (stepIndex < progressSteps.length) {
+            updateProgress(progressSteps[stepIndex].pct, progressSteps[stepIndex].text);
+            stepIndex++;
+        }
+    }, 2000);
+
+    try {
+        const response = await fetch('/process_local', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                sid: SID,
+                file_path: filePath
+            })
+        });
+        const data = await response.json();
+
+        clearInterval(progressInterval);
+        updateProgress(100, 'הושלם!');
+
+        if (data.success) {
+            document.getElementById('fileName').textContent = data.filename;
+            document.getElementById('meetingNo').textContent = data.meeting_info.meeting_no || 'לא זוהה';
+            document.getElementById('attendCount').textContent = data.attendances_count;
+            document.getElementById('staffCount').textContent = data.staff_count;
+            document.getElementById('discCount').textContent = data.discussions_count;
+
+            document.getElementById('extractionResult').style.display = 'block';
+            document.getElementById('meetingSelectionCard').style.display = 'block';
+
+            hideLoading();
+            showToast('הקובץ עובד בהצלחה!', 'success');
+
+            // Scroll to meeting selection
+            document.getElementById('meetingSelectionCard').scrollIntoView({behavior: 'smooth'});
+        } else {
+            hideLoading();
+            showToast(data.error || 'שגיאה בעיבוד הקובץ', 'danger');
+        }
+    } catch (error) {
+        clearInterval(progressInterval);
+        hideLoading();
+        showToast('שגיאה בעיבוד הקובץ', 'danger');
+        console.error('Error processing local file:', error);
+    }
+}
+
+// ========== END LOCAL FILE PICKER ==========
+
+
+// ========== BATCH PROCESSING QUEUE ==========
+
+let queuePollingInterval = null;
+
+async function startBatchProcessing() {
+    if (!selectedYear) {
+        showToast('יש לבחור שנה קודם', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('batchProcessBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> מתחיל...';
+
+    try {
+        const response = await fetch('/api/start_batch_processing', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({year: selectedYear})
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            showToast(data.error, 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-collection-play"></i> עבד את כל הממתינים';
+            return;
+        }
+
+        if (data.count === 0) {
+            showToast('אין קבצים ממתינים לעיבוד', 'info');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-collection-play"></i> עבד את כל הממתינים';
+            return;
+        }
+
+        showToast(`התחיל עיבוד של ${data.count} קבצים`, 'success');
+
+        // Show queue status panel
+        document.getElementById('queueStatusPanel').style.display = 'block';
+
+        // Start polling for status updates
+        startQueuePolling();
+
+    } catch (error) {
+        console.error('Error starting batch processing:', error);
+        showToast('שגיאה בהפעלת עיבוד אצוות', 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-collection-play"></i> עבד את כל הממתינים';
+    }
+}
+
+function startQueuePolling() {
+    // Poll every 2 seconds
+    queuePollingInterval = setInterval(updateQueueStatus, 2000);
+    updateQueueStatus(); // Initial update
+}
+
+function stopQueuePolling() {
+    if (queuePollingInterval) {
+        clearInterval(queuePollingInterval);
+        queuePollingInterval = null;
+    }
+}
+
+async function updateQueueStatus() {
+    try {
+        const response = await fetch('/api/queue_status');
+        const data = await response.json();
+
+        const progressBar = document.getElementById('queueProgressBar');
+        const progressText = document.getElementById('queueProgress');
+        const currentFile = document.getElementById('queueCurrentFile');
+        const completedCount = document.getElementById('queueCompletedCount');
+        const failedCount = document.getElementById('queueFailedCount');
+        const stopBtn = document.getElementById('stopQueueBtn');
+        const batchBtn = document.getElementById('batchProcessBtn');
+
+        // Update progress
+        progressBar.style.width = data.progress_percent + '%';
+        progressBar.textContent = Math.round(data.progress_percent) + '%';
+        progressText.textContent = `${data.current_index}/${data.total_files}`;
+
+        // Update current file
+        if (data.current_file) {
+            currentFile.textContent = 'מעבד: ' + data.current_file;
+        } else if (data.is_running) {
+            currentFile.textContent = 'מתחיל...';
+        } else {
+            currentFile.textContent = 'הסתיים';
+        }
+
+        // Update counts
+        completedCount.textContent = data.completed_count + ' הושלמו';
+        if (data.failed_count > 0) {
+            failedCount.style.display = 'inline';
+            failedCount.textContent = data.failed_count + ' נכשלו';
+        } else {
+            failedCount.style.display = 'none';
+        }
+
+        // Update completed files list
+        updateCompletedFilesList(data.completed);
+
+        // Check if done
+        if (!data.is_running && data.total_files > 0) {
+            stopQueuePolling();
+
+            // Update UI for completion
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-success');
+            stopBtn.style.display = 'none';
+
+            // Re-enable batch button
+            batchBtn.disabled = false;
+            batchBtn.innerHTML = '<i class="bi bi-collection-play"></i> עבד את כל הממתינים';
+
+            // Show notification
+            if (data.completed_count > 0) {
+                showToast(`הושלם עיבוד של ${data.completed_count} קבצים! לחץ על "ולידציה" ליד כל קובץ להמשך.`, 'success');
+
+                // Play notification sound if supported
+                try {
+                    const audio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU');
+                    audio.play().catch(() => {});
+                } catch(e) {}
+            }
+
+            // Refresh file list to show updated status
+            loadSourceFiles(selectedYear);
+        }
+
+    } catch (error) {
+        console.error('Error updating queue status:', error);
+    }
+}
+
+function updateCompletedFilesList(completed) {
+    const panel = document.getElementById('completedFilesPanel');
+    const list = document.getElementById('completedFilesList');
+
+    if (!completed || completed.length === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    panel.style.display = 'block';
+
+    list.innerHTML = completed.map(file => `
+        <div class="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
+            <span class="small">
+                <i class="bi bi-file-pdf text-danger"></i>
+                ${file.filename}
+            </span>
+            <button class="btn btn-sm btn-primary" onclick="loadFromQueue('${file.sid}', '${file.filename}')">
+                <i class="bi bi-check2-square"></i> ולידציה
+            </button>
+        </div>
+    `).join('');
+}
+
+async function loadFromQueue(queuedSid, filename) {
+    // Load data from queued processing into this page's session
+    // Then show the meeting selection step
+    showLoading('טוען נתוני קובץ מהתור...');
+
+    try {
+        // Fetch the extracted data from the queued session
+        const response = await fetch(`/api/get_queued_data?sid=${queuedSid}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast(data.error || 'לא נמצאו נתונים לקובץ זה', 'danger');
+            hideLoading();
+            return;
+        }
+
+        // Update the page's SID to use the queued SID
+        // and show the extraction results
+        document.getElementById('fileName').textContent = filename;
+        document.getElementById('meetingNo').textContent = data.meeting_info.meeting_no || 'לא זוהה';
+        document.getElementById('attendCount').textContent = data.attendances_count;
+        document.getElementById('staffCount').textContent = data.staff_count || 0;
+        document.getElementById('discCount').textContent = data.discussions_count;
+
+        document.getElementById('extractionResult').style.display = 'block';
+        document.getElementById('meetingSelectionCard').style.display = 'block';
+
+        hideLoading();
+        showToast('נתוני הקובץ נטענו - בחר ישיבה להמשך ולידציה', 'success');
+
+        // Scroll to meeting selection
+        document.getElementById('meetingSelectionCard').scrollIntoView({behavior: 'smooth'});
+
+        // Update startValidationBtn to use the queued SID
+        const validationBtn = document.getElementById('startValidationBtn');
+        validationBtn.href = `/step/1?sid=${queuedSid}`;
+
+        // Store the current SID we're using (the queued one)
+        window.currentQueuedSid = queuedSid;
+
+    } catch (error) {
+        console.error('Error loading from queue:', error);
+        showToast('שגיאה בטעינת נתוני הקובץ', 'danger');
+        hideLoading();
+    }
+}
+
+async function stopQueue() {
+    try {
+        const response = await fetch('/api/stop_queue', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        showToast(data.message || 'העיבוד נעצר', 'info');
+
+    } catch (error) {
+        console.error('Error stopping queue:', error);
+        showToast('שגיאה בעצירת התור', 'danger');
+    }
+}
+
+async function clearQueue() {
+    try {
+        const response = await fetch('/api/clear_queue', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('queueStatusPanel').style.display = 'none';
+            document.getElementById('completedFilesPanel').style.display = 'none';
+
+            // Reset progress bar
+            const progressBar = document.getElementById('queueProgressBar');
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            progressBar.classList.remove('bg-success');
+            progressBar.classList.add('progress-bar-animated');
+
+            showToast('התור נוקה', 'success');
+        }
+
+    } catch (error) {
+        console.error('Error clearing queue:', error);
+        showToast('שגיאה בניקוי התור', 'danger');
+    }
+}
+
+// Check queue status on page load (in case processing is running)
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const response = await fetch('/api/queue_status');
+        const data = await response.json();
+
+        if (data.is_running || data.completed_count > 0) {
+            document.getElementById('queueStatusPanel').style.display = 'block';
+
+            if (data.is_running) {
+                document.getElementById('batchProcessBtn').disabled = true;
+                document.getElementById('batchProcessBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> מעבד...';
+                startQueuePolling();
+            } else {
+                updateCompletedFilesList(data.completed);
+            }
+        }
+    } catch (error) {
+        console.error('Error checking queue status:', error);
+    }
+});
+
+// ========== END BATCH PROCESSING QUEUE ==========
+
 
 // Municipality selection handler
 document.getElementById('municipalitySelect').addEventListener('change', async function() {
@@ -279,11 +860,14 @@ async function handleMeetingSelect() {
     showLoading();
     const meetingId = this.getAttribute('data-id');
 
+    // Use queued SID if available, otherwise use page SID
+    const activeSid = window.currentQueuedSid || SID;
+
     try {
         const response = await fetch('/match_meeting', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({meeting_id: meetingId, sid: SID})
+            body: JSON.stringify({meeting_id: meetingId, sid: activeSid})
         });
         const data = await response.json();
 
@@ -326,6 +910,10 @@ async function handleMeetingSelect() {
 
             document.getElementById('comparisonContent').innerHTML = html;
             document.getElementById('comparisonPreview').style.display = 'block';
+
+            // Update the validation button link with the correct SID
+            const validationBtn = document.getElementById('startValidationBtn');
+            validationBtn.href = `/step/1?sid=${activeSid}`;
 
             // Scroll to preview
             document.getElementById('comparisonPreview').scrollIntoView({behavior: 'smooth'});

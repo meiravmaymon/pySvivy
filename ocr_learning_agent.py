@@ -462,6 +462,147 @@ class OCRLearningAgent:
 
         return len(patterns)
 
+    def get_known_name_mapping(self, ocr_name: str) -> Optional[Dict]:
+        """
+        בדיקה אם שם OCR מוכר ויש לו תיקון למוד.
+        מחזיר את השם הנכון מבסיס הנתונים אם נמצא.
+
+        Args:
+            ocr_name: השם שזוהה ב-OCR
+
+        Returns:
+            dict עם {correct_name, db_person_id, confidence} או None
+        """
+        if 'names' not in self.corrections:
+            return None
+
+        # חיפוש התאמה מדויקת
+        if ocr_name in self.corrections['names']:
+            data = self.corrections['names'][ocr_name]
+            if data.get('count', 0) >= 1:  # אפילו תיקון אחד מספיק לשמות
+                return {
+                    'correct_name': data['correct'],
+                    'db_person_id': data.get('db_person_id'),
+                    'confidence': min(data['count'] / 3, 1.0),
+                    'times_corrected': data['count']
+                }
+
+        # חיפוש שם הפוך (בעיית RTL)
+        reversed_name = ocr_name[::-1]
+        if reversed_name in self.corrections['names']:
+            data = self.corrections['names'][reversed_name]
+            if data.get('count', 0) >= 1:
+                return {
+                    'correct_name': data['correct'],
+                    'db_person_id': data.get('db_person_id'),
+                    'confidence': min(data['count'] / 3, 1.0),
+                    'times_corrected': data['count'],
+                    'was_reversed': True
+                }
+
+        return None
+
+    def record_name_match(self, ocr_name: str, correct_name: str, db_person_id: int = None):
+        """
+        שמירת התאמת שם - כשהמשתמש מאשר התאמה בין שם OCR לאדם בבסיס הנתונים
+
+        Args:
+            ocr_name: השם שזוהה ב-OCR
+            correct_name: השם הנכון מבסיס הנתונים
+            db_person_id: מזהה האדם בבסיס הנתונים
+        """
+        if ocr_name == correct_name:
+            return  # אין צורך לשמור אם זהה
+
+        if 'names' not in self.corrections:
+            self.corrections['names'] = {}
+
+        if ocr_name not in self.corrections['names']:
+            self.corrections['names'][ocr_name] = {
+                'correct': correct_name,
+                'db_person_id': db_person_id,
+                'count': 0,
+                'first_seen': datetime.now().isoformat()
+            }
+
+        self.corrections['names'][ocr_name]['count'] += 1
+        self.corrections['names'][ocr_name]['last_seen'] = datetime.now().isoformat()
+        if db_person_id:
+            self.corrections['names'][ocr_name]['db_person_id'] = db_person_id
+
+        # שמירה
+        self.save()
+
+        # לוג
+        self._log_correction('name', ocr_name, correct_name, {
+            'db_person_id': db_person_id,
+            'type': 'name_match'
+        })
+
+    def get_known_role_mapping(self, ocr_role: str) -> Optional[Dict]:
+        """
+        בדיקה אם תפקיד OCR מוכר ויש לו תיקון למוד.
+
+        Args:
+            ocr_role: התפקיד שזוהה ב-OCR
+
+        Returns:
+            dict עם {correct_role, confidence} או None
+        """
+        if 'roles' not in self.corrections:
+            return None
+
+        # חיפוש התאמה מדויקת
+        if ocr_role in self.corrections['roles']:
+            data = self.corrections['roles'][ocr_role]
+            if data.get('count', 0) >= 1:
+                return {
+                    'correct_role': data['correct'],
+                    'confidence': min(data['count'] / 3, 1.0),
+                    'times_corrected': data['count']
+                }
+
+        # חיפוש תפקיד הפוך
+        reversed_role = ocr_role[::-1]
+        if reversed_role in self.corrections['roles']:
+            data = self.corrections['roles'][reversed_role]
+            if data.get('count', 0) >= 1:
+                return {
+                    'correct_role': data['correct'],
+                    'confidence': min(data['count'] / 3, 1.0),
+                    'times_corrected': data['count'],
+                    'was_reversed': True
+                }
+
+        return None
+
+    def record_role_correction(self, ocr_role: str, correct_role: str):
+        """
+        שמירת תיקון תפקיד
+
+        Args:
+            ocr_role: התפקיד שזוהה ב-OCR
+            correct_role: התפקיד הנכון
+        """
+        if ocr_role == correct_role:
+            return
+
+        if 'roles' not in self.corrections:
+            self.corrections['roles'] = {}
+
+        if ocr_role not in self.corrections['roles']:
+            self.corrections['roles'][ocr_role] = {
+                'correct': correct_role,
+                'count': 0,
+                'first_seen': datetime.now().isoformat()
+            }
+
+        self.corrections['roles'][ocr_role]['count'] += 1
+        self.corrections['roles'][ocr_role]['last_seen'] = datetime.now().isoformat()
+
+        self.save()
+        self._log_correction('role', ocr_role, correct_role, {'type': 'role_correction'})
+
     def get_summary_feedback_stats(self) -> Dict:
         """
         סטטיסטיקות משוב על תקצירים שנוצרו ע"י AI

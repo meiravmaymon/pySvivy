@@ -7,8 +7,12 @@ Functions:
 - reverse_hebrew_text: Reverse RTL text that was read as LTR
 - normalize_final_letters: Fix final letter positions
 - fix_reversed_numbers: Fix numbers that appear reversed
+- normalize_hebrew_text: Full normalization pipeline
+- detect_reversed_text: Detect if text is reversed with confidence score
+- fix_common_ocr_errors: Fix common OCR mistakes in Hebrew
 """
 import re
+from typing import Tuple, List, Optional
 
 
 def normalize_final_letters(text):
@@ -254,3 +258,318 @@ def clean_ocr_text(text):
     text = re.sub(r'[|]', '', text)
 
     return text.strip()
+
+
+# =============================================================================
+# New Enhanced Functions
+# =============================================================================
+
+# Common OCR character confusions in Hebrew
+OCR_CONFUSIONS = {
+    # Similar-looking Hebrew letters
+    'ד': ['ר'],  # dalet ↔ resh
+    'ר': ['ד'],
+    'ו': ['ן'],  # vav ↔ final nun (in some fonts)
+    'ת': ['ח'],  # tav ↔ chet
+    'ח': ['ת'],
+    'ב': ['כ'],  # bet ↔ kaf
+    'כ': ['ב'],
+    'ה': ['ח'],  # he ↔ chet
+    'ע': ['צ'],  # ayin ↔ tsade
+    'צ': ['ע'],
+    'ס': ['ם'],  # samekh ↔ final mem
+    'ם': ['ס'],
+}
+
+# Common Hebrew name patterns (for validation)
+COMMON_FIRST_NAMES = [
+    'אברהם', 'יצחק', 'יעקב', 'משה', 'דוד', 'שלמה', 'יוסף', 'בנימין',
+    'שרה', 'רבקה', 'רחל', 'לאה', 'מרים', 'חנה', 'דבורה', 'אסתר',
+    'יוני', 'דני', 'רוני', 'שרון', 'אילן', 'גיל', 'עמית', 'שי',
+    'מאיר', 'חיים', 'אהרון', 'שמעון', 'ראובן', 'יהודה', 'נפתלי',
+    'מיכל', 'נעמה', 'טלי', 'ליאת', 'אורית', 'גלית', 'עינת', 'נטלי',
+]
+
+COMMON_LAST_NAMES = [
+    'כהן', 'לוי', 'מזרחי', 'פרץ', 'ביטון', 'דהן', 'אברהם', 'פרידמן',
+    'שרון', 'גולן', 'בן דוד', 'אוחיון', 'חדד', 'עמר', 'אזולאי',
+    'גרינברג', 'רוזנברג', 'גולדברג', 'שוורץ', 'קליין', 'וייס',
+    'מימון', 'סעד', 'בושרי', 'מקליס', 'פינקר', 'רוטמן',
+]
+
+
+def detect_reversed_text(text: str) -> Tuple[bool, float]:
+    """
+    Detect if Hebrew text is reversed with a confidence score.
+
+    Uses multiple indicators:
+    - Final letters in wrong positions
+    - Known reversed word patterns
+    - Known normal word patterns (negative indicator)
+
+    Args:
+        text: Text to analyze
+
+    Returns:
+        Tuple of (is_reversed, confidence) where confidence is 0.0-1.0
+    """
+    if not text or len(text.strip()) < 2:
+        return False, 0.0
+
+    text_stripped = text.strip()
+
+    # Extract Hebrew words
+    hebrew_words = re.findall(r'[א-תךםןףץ]+', text_stripped)
+    if not hebrew_words:
+        return False, 0.0
+
+    # Final letters that shouldn't appear at start or middle
+    final_letters = set('םןףץך')
+
+    # Count indicators
+    reversed_indicators = 0
+    normal_indicators = 0
+
+    # Check 1: Final letters at word start (strong reversed indicator)
+    final_at_start = sum(1 for word in hebrew_words
+                         if len(word) > 1 and word[0] in final_letters)
+    if final_at_start > 0:
+        ratio = final_at_start / len(hebrew_words)
+        if ratio > 0.1:  # More than 10% of words
+            reversed_indicators += 3
+        elif ratio > 0.02:  # More than 2%
+            reversed_indicators += 1
+
+    # Check 2: Final letters in middle (count as one indicator, not per-word)
+    final_in_middle = sum(1 for word in hebrew_words
+                          if len(word) > 2 and any(c in final_letters for c in word[1:-1]))
+    if final_in_middle > 0:
+        ratio = final_in_middle / len([w for w in hebrew_words if len(w) > 2])
+        if ratio > 0.1:
+            reversed_indicators += 2
+        elif ratio > 0.02:
+            reversed_indicators += 1
+
+    # Check 3: Known reversed patterns
+    reversed_patterns = [
+        'ןהכ', 'יול', 'ןומימ', 'ריאמ', 'ןד',  # Common reversed names
+        'לוקוטורפ', 'הבישי', 'הצעומ', 'הייריע',  # Common reversed words
+    ]
+    for pattern in reversed_patterns:
+        if pattern in text_stripped:
+            reversed_indicators += 1
+
+    # Check 4: Known NORMAL patterns (negative indicator - text is NOT reversed)
+    normal_patterns = [
+        'פרוטוקול', 'ישיבה', 'מועצה', 'עירייה',  # Common words
+        'החלטה', 'הצבעה', 'אושר', 'נגד', 'בעד',  # Decision words
+        'משתתפים', 'נוכחים', 'חסרים', 'סגל',  # Attendance
+        'ראש העיר', 'חבר מועצה', 'סגן',  # Roles
+        'סעיף', 'דיון', 'תקציב',  # Meeting terms
+    ]
+    for pattern in normal_patterns:
+        if pattern in text_stripped:
+            normal_indicators += 1
+
+    # Calculate final result
+    total_indicators = reversed_indicators + normal_indicators
+
+    if total_indicators == 0:
+        return False, 0.0
+
+    # If normal patterns found, bias heavily toward normal
+    if normal_indicators > 0:
+        if reversed_indicators == 0:
+            return False, 0.0
+        # Need strong reversed evidence to override normal patterns
+        if reversed_indicators < normal_indicators * 2:
+            return False, min(reversed_indicators / (normal_indicators * 2), 0.3)
+
+    # Pure reversed detection
+    if reversed_indicators >= 3:
+        confidence = min(reversed_indicators / 5, 1.0)
+        return True, confidence
+    elif reversed_indicators >= 1:
+        # Weak signal - could be OCR errors
+        return False, reversed_indicators * 0.2
+
+    return False, 0.0
+
+
+def fix_common_ocr_errors(text: str) -> str:
+    """
+    Fix common OCR errors in Hebrew text.
+
+    This function applies known corrections for common OCR mistakes.
+
+    Args:
+        text: Text with potential OCR errors
+
+    Returns:
+        Text with common errors fixed
+    """
+    if not text:
+        return text
+
+    result = text
+
+    # Fix common word errors (known corrections)
+    corrections = {
+        # Reversed common words (if not caught by reverse detection)
+        'לוקוטורפ': 'פרוטוקול',
+        'הבישי': 'ישיבה',
+        'הצעומ': 'מועצה',
+        'הייריע': 'עירייה',
+        # Common OCR mistakes
+        'ארשו': 'אושר',
+        'רשוא': 'אושר',
+        'העבצה': 'הצבעה',
+        'הטלחה': 'החלטה',
+    }
+
+    for wrong, correct in corrections.items():
+        result = result.replace(wrong, correct)
+
+    return result
+
+
+def normalize_hebrew_text(text: str, fix_reversed: bool = True) -> str:
+    """
+    Full normalization pipeline for Hebrew OCR text.
+
+    Applies all available fixes in the correct order:
+    1. Clean OCR artifacts
+    2. Detect and fix reversed text
+    3. Normalize final letters
+    4. Fix reversed numbers
+    5. Fix common OCR errors
+
+    Args:
+        text: Raw OCR text
+        fix_reversed: Whether to auto-detect and fix reversed text
+
+    Returns:
+        Fully normalized text
+    """
+    if not text:
+        return text
+
+    # Step 1: Clean OCR artifacts
+    result = clean_ocr_text(text)
+
+    # Step 2: Detect and fix reversed text
+    if fix_reversed:
+        is_reversed, confidence = detect_reversed_text(result)
+        if is_reversed and confidence > 0.4:
+            result = result[::-1]
+            result = normalize_final_letters(result)
+
+    # Step 3: Fix reversed numbers
+    result = fix_reversed_numbers(result)
+    result = fix_reversed_short_numbers(result)
+
+    # Step 4: Fix common OCR errors
+    result = fix_common_ocr_errors(result)
+
+    return result
+
+
+def extract_hebrew_words(text: str) -> List[str]:
+    """
+    Extract all Hebrew words from text.
+
+    Args:
+        text: Text to extract from
+
+    Returns:
+        List of Hebrew words
+    """
+    if not text:
+        return []
+
+    return re.findall(r'[א-תךםןףץ]+', text)
+
+
+def is_valid_hebrew_name(name: str) -> bool:
+    """
+    Check if a string looks like a valid Hebrew name.
+
+    Args:
+        name: Potential name string
+
+    Returns:
+        True if it looks like a valid name
+    """
+    if not name or len(name) < 2:
+        return False
+
+    # Must contain Hebrew letters
+    hebrew_chars = re.findall(r'[א-תךםןףץ]', name)
+    if len(hebrew_chars) < 2:
+        return False
+
+    # Check for final letters in wrong positions
+    final_letters = set('םןףץך')
+    words = name.split()
+
+    for word in words:
+        hebrew_only = re.sub(r'[^א-תךםןףץ]', '', word)
+        if len(hebrew_only) > 1:
+            # Final letter at start = reversed
+            if hebrew_only[0] in final_letters:
+                return False
+            # Final letter in middle = reversed
+            if any(c in final_letters for c in hebrew_only[1:-1]):
+                return False
+
+    return True
+
+
+def similarity_score(str1: str, str2: str) -> float:
+    """
+    Calculate similarity between two Hebrew strings.
+
+    Uses Levenshtein-like distance but also considers
+    common OCR confusions.
+
+    Args:
+        str1: First string
+        str2: Second string
+
+    Returns:
+        Similarity score 0.0-1.0
+    """
+    if not str1 or not str2:
+        return 0.0
+
+    if str1 == str2:
+        return 1.0
+
+    # Normalize both strings
+    s1 = str1.strip().lower()
+    s2 = str2.strip().lower()
+
+    if s1 == s2:
+        return 1.0
+
+    # Check if one is reversed version of other
+    if s1 == s2[::-1] or normalize_final_letters(s1) == normalize_final_letters(s2[::-1]):
+        return 0.9
+
+    # Simple character-based similarity
+    len1, len2 = len(s1), len(s2)
+    max_len = max(len1, len2)
+
+    if max_len == 0:
+        return 1.0
+
+    # Count matching characters
+    matches = sum(1 for c1, c2 in zip(s1, s2) if c1 == c2)
+
+    # Account for OCR confusions
+    for i, (c1, c2) in enumerate(zip(s1, s2)):
+        if c1 != c2:
+            if c2 in OCR_CONFUSIONS.get(c1, []):
+                matches += 0.5
+
+    return matches / max_len

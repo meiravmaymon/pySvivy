@@ -9,6 +9,8 @@ Usage:
     # Access configuration
     db_path = config.DATABASE_PATH
     tesseract_path = config.TESSERACT_PATH
+
+Environment variables can be set in a .env file in the project root.
 """
 import os
 import logging
@@ -16,6 +18,35 @@ from pathlib import Path
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent
+
+# Load .env file if it exists
+def load_dotenv():
+    """Load environment variables from .env file."""
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if not line or line.startswith('#'):
+                        continue
+                    # Parse KEY=VALUE
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        # Remove quotes if present
+                        if value and value[0] in ('"', "'") and value[-1] == value[0]:
+                            value = value[1:-1]
+                        # Only set if not already set (env vars take precedence)
+                        if key not in os.environ:
+                            os.environ[key] = value
+        except Exception as e:
+            print(f"Warning: Could not load .env file: {e}")
+
+# Load .env on module import
+load_dotenv()
 
 # Configure logging
 def setup_logging(level=logging.INFO, log_file=None):
@@ -51,7 +82,7 @@ class Config:
 
     # Application
     APP_NAME = 'Svivy Municipal System'
-    VERSION = '2.0'
+    VERSION = '2.2'
     DEBUG = os.environ.get('SVIVY_DEBUG', 'false').lower() == 'true'
 
     # Database
@@ -61,7 +92,8 @@ class Config:
     DATABASE_URL = f'sqlite:///{DATABASE_PATH}'
 
     # Web App
-    SECRET_KEY = os.environ.get('SVIVY_SECRET_KEY', 'svivy_ocr_validation_secret_key_2024')
+    # IMPORTANT: Set SVIVY_SECRET_KEY environment variable in production!
+    SECRET_KEY = os.environ.get('SVIVY_SECRET_KEY', 'dev-only-change-in-production-' + str(hash(str(BASE_DIR)))[:16])
     UPLOAD_FOLDER = os.environ.get('SVIVY_UPLOAD_FOLDER', str(BASE_DIR / 'uploads'))
     MAX_CONTENT_LENGTH = int(os.environ.get('SVIVY_MAX_UPLOAD_MB', '50')) * 1024 * 1024
 
@@ -80,10 +112,28 @@ class Config:
     OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
     OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '120'))
 
+    # LLM / Google Gemini
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', os.environ.get('GOOGLE_API_KEY', ''))
+    GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-lite')
+    GEMINI_REQUESTS_PER_MINUTE = int(os.environ.get('GEMINI_REQUESTS_PER_MINUTE', '15'))
+    GEMINI_DAILY_TOKEN_LIMIT = int(os.environ.get('GEMINI_DAILY_TOKEN_LIMIT', '1000000'))
+
     # Folders
     PROTOCOLS_FOLDER = os.environ.get('SVIVY_PROTOCOLS_FOLDER', str(BASE_DIR / 'protocols_pdf'))
     OCR_RESULTS_FOLDER = os.environ.get('SVIVY_OCR_RESULTS_FOLDER', str(BASE_DIR / 'ocr_results'))
     LOGS_FOLDER = str(BASE_DIR / 'logs')
+
+    # Source folder for PDF protocols - תיקיית מקור לפרוטוקולים
+    SOURCE_PDF_FOLDER = os.environ.get(
+        'SVIVY_SOURCE_PDF_FOLDER',
+        r'C:\SvivyPro\sviviy\protocolPdf\yehud-monoson\cityCuncilProtocol'
+    )
+
+    # Processed files destination - תיקיית יעד לקבצים שעובדו
+    WORKED_ON_FOLDER = os.environ.get(
+        'SVIVY_WORKED_ON_FOLDER',
+        r'C:\SvivyPro\sviviy\protocolPdf\yehud-monoson\cityCuncilProtocol\worked_on'
+    )
 
     # Learning data
     LEARNING_DATA_FILE = str(BASE_DIR / 'ocr_learning_data.json')
@@ -131,6 +181,7 @@ class Config:
         print(f"  Database: {cls.DATABASE_PATH}")
         print(f"  Tesseract: {cls.TESSERACT_PATH}")
         print(f"  Ollama: {cls.OLLAMA_HOST} ({cls.OLLAMA_MODEL})")
+        print(f"  Gemini: {cls.GEMINI_MODEL} ({'configured' if cls.GEMINI_API_KEY else 'not configured'})")
         print(f"  Upload Folder: {cls.UPLOAD_FOLDER}")
         print(f"  Protocols: {cls.PROTOCOLS_FOLDER}")
         print("=" * 50)

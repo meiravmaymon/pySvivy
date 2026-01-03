@@ -338,9 +338,34 @@
 
 {% block extra_js %}
 <script>
-// Reverse Hebrew text
+// Reverse Hebrew text with proper handling of final letters (אותיות סופיות)
 function reverseText(text) {
-    return text.split('').reverse().join('');
+    // Map of final letters to regular and vice versa
+    const finalToRegular = {'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ'};
+    const regularToFinal = {'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ'};
+
+    // Reverse the string
+    let reversed = text.split('').reverse().join('');
+
+    // Fix final letters:
+    // 1. Finals that are now in the middle/start → convert to regular
+    // 2. Regular letters that are now at word end → convert to final
+    let result = '';
+    for (let i = 0; i < reversed.length; i++) {
+        const char = reversed[i];
+        const isEndOfWord = (i === reversed.length - 1) || /\s/.test(reversed[i + 1]);
+
+        if (finalToRegular[char] && !isEndOfWord) {
+            // Final letter not at end of word → convert to regular
+            result += finalToRegular[char];
+        } else if (regularToFinal[char] && isEndOfWord) {
+            // Regular letter at end of word → convert to final
+            result += regularToFinal[char];
+        } else {
+            result += char;
+        }
+    }
+    return result;
 }
 
 // Update counts

@@ -410,9 +410,34 @@ let currentMatchElement = null;
 let currentMatchType = null;
 let allPersons = [];
 
-// Reverse Hebrew text
+// Reverse Hebrew text with proper handling of final letters (אותיות סופיות)
 function reverseText(text) {
-    return text.split('').reverse().join('');
+    // Map of final letters to regular and vice versa
+    const finalToRegular = {'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ'};
+    const regularToFinal = {'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ'};
+
+    // Reverse the string
+    let reversed = text.split('').reverse().join('');
+
+    // Fix final letters:
+    // 1. Finals that are now in the middle/start → convert to regular
+    // 2. Regular letters that are now at word end → convert to final
+    let result = '';
+    for (let i = 0; i < reversed.length; i++) {
+        const char = reversed[i];
+        const isEndOfWord = (i === reversed.length - 1) || /\s/.test(reversed[i + 1]);
+
+        if (finalToRegular[char] && !isEndOfWord) {
+            // Final letter not at end of word → convert to regular
+            result += finalToRegular[char];
+        } else if (regularToFinal[char] && isEndOfWord) {
+            // Regular letter at end of word → convert to final
+            result += regularToFinal[char];
+        } else {
+            result += char;
+        }
+    }
+    return result;
 }
 
 // Load all persons on page load
@@ -569,16 +594,59 @@ function matchToPerson(btn, ocrName, type) {
 // Confirm match
 async function confirmMatch() {
     const personId = document.getElementById('personSelect').value;
+    const personSelect = document.getElementById('personSelect');
+    const selectedOption = personSelect.options[personSelect.selectedIndex];
+    const personName = selectedOption ? selectedOption.text : '';
+
     if (!personId) {
         showToast('יש לבחור אדם', 'warning');
         return;
     }
 
-    // Here we would update the attendance record
-    // For now, just remove the card and show success
-    currentMatchElement.remove();
-    bootstrap.Modal.getInstance(document.getElementById('matchPersonModal')).hide();
-    showToast('ההתאמה נשמרה');
+    const ocrName = document.getElementById('ocrNameToMatch').textContent;
+
+    try {
+        // 1. Save the attendance match to pending changes
+        const response = await fetch('/api/update_attendance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                sid: getSid(),
+                person_id: parseInt(personId),
+                action: 'add'
+            })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.error || 'שגיאה בשמירת התאמה', 'danger');
+            return;
+        }
+
+        // 2. Log the correction to learning agent
+        await fetch('/api/record_correction', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                sid: getSid(),
+                correction_type: 'name_match',
+                ocr_value: ocrName,
+                corrected_value: personName,
+                person_id: parseInt(personId),
+                context: currentMatchType  // 'unmatched_present' or 'unmatched_absent'
+            })
+        });
+
+        // 3. Update UI
+        currentMatchElement.remove();
+        bootstrap.Modal.getInstance(document.getElementById('matchPersonModal')).hide();
+        showToast('ההתאמה נשמרה (ממתינה לאישור סופי)', 'success');
+        updatePendingIndicator();
+
+    } catch (error) {
+        console.error('Error saving match:', error);
+        showToast('שגיאה בשמירת ההתאמה', 'danger');
+    }
 }
 </script>
 {% endblock %}

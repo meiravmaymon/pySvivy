@@ -4,7 +4,12 @@
 
 סקריפט זה בודק את כל השאילתות של הפילטרים בכל הדפים
 ומציג את התוצאות בצורה ברורה
+
+הערה: זהו סקריפט בדיקה ידני (לא pytest) - יש להריץ עם python tests/test_filters_simple.py
 """
+
+import pytest
+pytest.skip("Manual test script - run directly with: python tests/test_filters_simple.py", allow_module_level=True)
 
 import requests
 import json
@@ -22,7 +27,7 @@ def print_subheader(text):
     print(text)
     print("-"*80)
 
-def test_api(endpoint, description):
+def call_api(endpoint, description):
     """Test an API endpoint and display results"""
     url = f"{BASE_URL}{endpoint}"
     print(f"\n🔍 שאילתה: GET {endpoint}")
@@ -53,13 +58,13 @@ def main():
     print_header("1. בדיקת API Endpoints החדשים")
 
     print_subheader("1.1 קדנציה נוכחית")
-    current_term_data = test_api('/api/current-term', 'קדנציה נוכחית')
+    current_term_data = call_api('/api/current-term', 'קדנציה נוכחית')
 
     print_subheader("1.2 רשימת עיריות")
-    municipalities_data = test_api('/api/municipalities', 'רשימת עיריות')
+    municipalities_data = call_api('/api/municipalities', 'רשימת עיריות')
 
     print_subheader("1.3 תקופות זמינות")
-    periods_data = test_api('/api/periods', 'תקופות זמינות (קדנציות ושנים)')
+    periods_data = call_api('/api/periods', 'תקופות זמינות (קדנציות ושנים)')
 
     # ============================================================
     # 2. בדיקת פילטרים - דף הבית
@@ -69,19 +74,19 @@ def main():
     print_subheader("2.1 ברירת מחדל - קדנציה נוכחית")
     if current_term_data:
         term = current_term_data['term_number']
-        stats = test_api(f'/api/stats?filter_type=term&filter_value={term}',
+        stats = call_api(f'/api/stats?filter_type=term&filter_value={term}',
                         f'סטטיסטיקות לקדנציה {term}')
 
     print_subheader("2.2 קדנציה 16")
-    stats_16 = test_api('/api/stats?filter_type=term&filter_value=16',
+    stats_16 = call_api('/api/stats?filter_type=term&filter_value=16',
                        'סטטיסטיקות לקדנציה 16')
 
     print_subheader("2.3 קדנציה 15")
-    stats_15 = test_api('/api/stats?filter_type=term&filter_value=15',
+    stats_15 = call_api('/api/stats?filter_type=term&filter_value=15',
                        'סטטיסטיקות לקדנציה 15')
 
     print_subheader("2.4 שנה 2020")
-    stats_2020 = test_api('/api/stats?filter_type=year&filter_value=2020',
+    stats_2020 = call_api('/api/stats?filter_type=year&filter_value=2020',
                          'סטטיסטיקות לשנת 2020')
 
     # ============================================================
@@ -90,7 +95,7 @@ def main():
     print_header("3. דף החלטות")
 
     print_subheader("3.1 קדנציה 16 - כל השנים")
-    disc_16 = test_api('/api/discussions?filter_type=term&filter_value=16&limit=3',
+    disc_16 = call_api('/api/discussions?filter_type=term&filter_value=16&limit=3',
                       'החלטות בקדנציה 16')
     if disc_16:
         print(f"\n📈 סה\"כ החלטות שהתקבלו: {len(disc_16)}")
@@ -103,21 +108,21 @@ def main():
             print(f"📅 שנים בפועל: {sorted(years)}")
 
     print_subheader("3.2 שנים זמינות לקדנציה 16")
-    years_16 = test_api('/api/available-years?filter_type=term&filter_value=16',
+    years_16 = call_api('/api/available-years?filter_type=term&filter_value=16',
                        'שנים זמינות לקדנציה 16')
 
     print_subheader("3.3 קדנציה 16 + שנה 2020")
-    disc_16_2020 = test_api('/api/discussions?filter_type=term&filter_value=16&year=2020&limit=3',
+    disc_16_2020 = call_api('/api/discussions?filter_type=term&filter_value=16&year=2020&limit=3',
                            'החלטות בקדנציה 16, שנת 2020')
     if disc_16_2020:
         print(f"\n📈 סה\"כ החלטות: {len(disc_16_2020)}")
 
     print_subheader("3.4 קדנציה 15")
-    disc_15 = test_api('/api/discussions?filter_type=term&filter_value=15&limit=3',
+    disc_15 = call_api('/api/discussions?filter_type=term&filter_value=15&limit=3',
                       'החלטות בקדנציה 15')
 
     print_subheader("3.5 שנים זמינות לקדנציה 15")
-    years_15 = test_api('/api/available-years?filter_type=term&filter_value=15',
+    years_15 = call_api('/api/available-years?filter_type=term&filter_value=15',
                        'שנים זמינות לקדנציה 15')
 
     # ============================================================
@@ -126,7 +131,7 @@ def main():
     print_header("4. דף חברי מועצה")
 
     print_subheader("4.1 קדנציה 16")
-    persons_16 = test_api('/api/persons?filter_type=term&filter_value=16',
+    persons_16 = call_api('/api/persons?filter_type=term&filter_value=16',
                          'חברי מועצה בקדנציה 16')
     if persons_16:
         print(f"\n📈 סה\"כ חברי מועצה: {len(persons_16)}")
@@ -134,7 +139,7 @@ def main():
         print(f"👥 פעילים: {active}, לשעבר: {len(persons_16) - active}")
 
     print_subheader("4.2 קדנציה 15")
-    persons_15 = test_api('/api/persons?filter_type=term&filter_value=15',
+    persons_15 = call_api('/api/persons?filter_type=term&filter_value=15',
                          'חברי מועצה בקדנציה 15')
     if persons_15:
         print(f"\n📈 סה\"כ חברי מועצה: {len(persons_15)}")
@@ -145,7 +150,7 @@ def main():
     print_header("5. דף ועדות")
 
     print_subheader("5.1 כל הועדות")
-    boards = test_api('/api/boards', 'כל הועדות')
+    boards = call_api('/api/boards', 'כל הועדות')
     if boards:
         print(f"\n📈 סה\"כ ועדות: {len(boards)}")
         active_boards = sum(1 for b in boards if b.get('is_active'))

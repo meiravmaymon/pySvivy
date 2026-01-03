@@ -19,7 +19,19 @@
       "Bash(dir:*)",
       "Bash(wc:*)",
       "Bash(find:*)",
-      "Bash(del \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\\\\templates\\\\step4_discussions.html\")"
+      "Bash(del \"c:\\\\SvivyPro\\\\sviviy\\\\pySvivy\\\\templates\\\\step4_discussions.html\")",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(pip install:*)",
+      "Bash(alembic revision:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(tasklist:*)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(jupyter kernelspec:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"c:/SvivyPro/sviviy/pySvivy/kill_port.ps1\")",
+      "Bash(mkdir:*)"
     ]
   }
 }
